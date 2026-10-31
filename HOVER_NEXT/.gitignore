@@ -12,3 +12,12 @@ chrome_profile/
 *.m4a
 *.zip
 data/
+
+# NEVER commit Google OAuth credentials, tokens or the IPC state
+google_oauth_client.json
+client_secret*.json
+google_tokens/
+google_control.txt
+google_status.tsv
+*.dpapi
+*.token
