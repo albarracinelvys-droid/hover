@@ -3,7 +3,28 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from hover_next.intent import parse, normalize
+from hover_next.wake import extract_wake
 from hover_next.executor import Executor,find_download,safe_destination
+
+class WakeTests(unittest.TestCase):
+    def test_exact_user_transcript(self):
+        self.assertEqual(extract_wake('Oye, ¿jover?'), '')
+        self.assertEqual(extract_wake('¡Huji Hover!'), '')
+        self.assertEqual(extract_wake('Oye Hover.'), '')
+
+    def test_phrase_with_command(self):
+        self.assertEqual(extract_wake('Oye, ¿jover? Abre Claude.'), 'abre claude')
+        self.assertEqual(extract_wake('Oye Hover reproduce Spotify.'), 'reproduce spotify')
+
+    def test_cli_parser_with_punctuation(self):
+        self.assertEqual(parse('Oye, ¿jover? abre ChatGPT').action, 'open_site')
+
+    def test_no_ambient_trigger(self):
+        self.assertIsNone(extract_wake('ok, vamos'))
+        self.assertIsNone(extract_wake('el profesor mencionó oye Hover en clase'))
+        self.assertIsNone(extract_wake('hover'))
+        self.assertIsNone(extract_wake('hoy vamos a clase'))
+
 
 class IntentTests(unittest.TestCase):
     def test_chatgpt(self):
