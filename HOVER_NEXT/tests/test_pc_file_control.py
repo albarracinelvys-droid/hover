@@ -1,4 +1,4 @@
-"""File operations stay scoped, user-confirmed and never overwrite targets."""
+"""File operations stay scoped, with spoken confirmation for deletion."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,7 +15,7 @@ class SpokenPCCommands(unittest.TestCase):
     def test_real_whisper_zip_request_is_a_file_move_not_google_search(self):
         i=parse("Oye, puedes mover el último comprimido de descargas a escritorio.")
         self.assertEqual(i.action,"pc_transfer")
-        self.assertTrue(i.requires_confirmation)
+        self.assertFalse(i.requires_confirmation)
         self.assertEqual(i.args["from"],"downloads")
         self.assertEqual(i.args["to"],"desktop")
         self.assertEqual(i.args["kind"],"archive")
@@ -36,20 +36,20 @@ class SpokenPCCommands(unittest.TestCase):
         i=parse("crea una carpeta llamada Informes en el escritorio")
         self.assertEqual(i.action,"pc_create")
         self.assertEqual(i.args["location"],"desktop")
-        self.assertTrue(i.requires_confirmation)
+        self.assertFalse(i.requires_confirmation)
 
     def test_rename_requires_confirmation(self):
         i=parse("renombra el archivo informe.txt en descargas a informe nuevo.txt")
         self.assertEqual(i.action,"pc_rename")
         self.assertEqual(i.args["old"],"informe.txt")
         self.assertEqual(i.args["new"],"informe nuevo.txt")
-        self.assertTrue(i.requires_confirmation)
+        self.assertFalse(i.requires_confirmation)
 
     def test_append_requires_confirmation(self):
         i=parse("agrega texto mantenimiento terminado al archivo notas.txt en documentos")
         self.assertEqual(i.action,"pc_append")
         self.assertEqual(i.args["name"],"notas.txt")
-        self.assertTrue(i.requires_confirmation)
+        self.assertFalse(i.requires_confirmation)
 
     def test_how_to_question_is_not_a_file_move(self):
         self.assertEqual(
@@ -74,45 +74,112 @@ class SpokenPCCommands(unittest.TestCase):
 
 
 class FileConfirmationFlow(unittest.TestCase):
-    def test_exact_user_voice_transcript_reaches_confirmation_and_executes(self):
-        # Regression: app.run_one previously failed with NameError: Intent
-        # after resolving the most recent ZIP, before the confirmation dialog.
+    def test_latest_archive_runs_without_popup(self):
         from hover_next.app import run_one
         executor=MagicMock()
         executor.config={}
-        executor.execute.return_value="Moví backup.zip al Escritorio."
-        selected={"operation":"move","pick":"name","kind":"archive",
+        executor.execute.return_value="Movido"
+        snapshot={"operation":"move","pick":"name","kind":"archive",
                   "from":"downloads","to":"desktop","name":"backup.zip",
                   "size":"123","mtime_ns":"456"}
-        with patch("hover_next.pc_files.prepare_transfer",return_value=selected) as prepare, \
-             patch("hover_next.app.confirm_voice_intent",return_value=True) as confirm, \
+        with patch("hover_next.pc_files.prepare_transfer",return_value=snapshot), \
+             patch("hover_next.app.confirm_voice_intent") as popup, \
              patch("hover_next.app.publish"):
             result=run_one(
                 "Oye Hover, mueve el último comprimido de descargas al escritorio.",
                 executor,voice_mode=True)
-        self.assertEqual(result,"Moví backup.zip al Escritorio.")
-        prepare.assert_called_once()
-        confirm.assert_called_once()
-        approved=confirm.call_args.args[0]
-        self.assertEqual(approved.action,"pc_transfer")
-        self.assertTrue(approved.requires_confirmation)
-        self.assertEqual(approved.args["name"],"backup.zip")
-        executor.execute.assert_called_once_with(approved,confirmed=True)
+        self.assertEqual(result,"Movido")
+        popup.assert_not_called()
+        cmd=executor.execute.call_args.args[0]
+        self.assertFalse(cmd.requires_confirmation)
+        self.assertEqual(cmd.args["name"],"backup.zip")
+        executor.execute.assert_called_once_with(cmd,confirmed=True)
 
-    def test_user_cancels_without_moving_any_file(self):
+    def test_invalid_selection_does_not_execute(self):
         from hover_next.app import run_one
         executor=MagicMock()
         executor.config={}
-        selected={"operation":"move","pick":"name","kind":"archive",
-                  "from":"downloads","to":"desktop","name":"backup.zip",
-                  "size":"123","mtime_ns":"456"}
-        with patch("hover_next.pc_files.prepare_transfer",return_value=selected), \
-             patch("hover_next.app.confirm_voice_intent",return_value=False), \
+        with patch("hover_next.pc_files.prepare_transfer",
+                   side_effect=pc_files.PCFileError("Not found")), \
              patch("hover_next.app.publish"):
-            result=run_one(
+            self.assertIsNone(run_one(
                 "Oye Hover, mueve el último comprimido de descargas al escritorio.",
-                executor,voice_mode=True)
-        self.assertIsNone(result)
+                executor,voice_mode=True))
+        executor.execute.assert_not_called()
+
+
+class DeleteVoiceTests(unittest.TestCase):
+    def make_dialogue(self):
+        from hover_next.intent import Intent
+        now=[100.]
+        confirmed=[]
+        executed=[]
+        def prepare(_):
+            return Intent("pc_delete",args={
+                "pick":"name","name":"factura.pdf","location":"downloads",
+                "size":"7","mtime_ns":"8"},requires_confirmation=True)
+        dialogue=VoiceDialogue(
+            lambda text:executed.append(text) or "success",
+            lambda *args:None,
+            clock=lambda:now[0],
+            prepare_delete=prepare,
+            execute_confirmed=lambda intent:confirmed.append(intent) or "En Papelera")
+        return dialogue,now,confirmed,executed
+
+    def test_delete_wants_confirmation_but_never_executes_immediately(self):
+        dialogue,now,confirmed,executed=self.make_dialogue()
+        self.assertEqual(dialogue.process(
+            "Oye Hover, elimina el archivo factura.pdf de descargas"),"waiting")
+        self.assertEqual(confirmed,[])
+        self.assertEqual(executed,[])
+        self.assertEqual(dialogue.pending_delete.args["name"],"factura.pdf")
+
+    def test_yes_performs_once_only(self):
+        dialogue,now,confirmed,executed=self.make_dialogue()
+        dialogue.process("Oye Hover, elimina el archivo factura.pdf de descargas")
+        self.assertEqual(dialogue.process("Sí"),"action")
+        self.assertEqual(len(confirmed),1)
+        dialogue.process("Sí")
+        self.assertEqual(len(confirmed),1)
+
+    def test_no_cancels(self):
+        dialogue,now,confirmed,executed=self.make_dialogue()
+        dialogue.process("Oye Hover, elimina el archivo factura.pdf de descargas")
+        self.assertEqual(dialogue.process("No"),"cancel")
+        self.assertFalse(confirmed)
+
+    def test_unrelated_speech_cannot_approve(self):
+        dialogue,now,confirmed,executed=self.make_dialogue()
+        dialogue.process("Oye Hover, elimina el archivo factura.pdf de descargas")
+        self.assertEqual(dialogue.process("sí por favor abre calculadora"),"waiting")
+        self.assertFalse(confirmed)
+
+    def test_timeout_does_not_execute(self):
+        dialogue,now,confirmed,executed=self.make_dialogue()
+        dialogue.process("Oye Hover, elimina el archivo factura.pdf de descargas")
+        now[0]=121
+        self.assertEqual(dialogue.process("Sí"),"cancel")
+        self.assertFalse(confirmed)
+
+    def test_delete_grammar_and_scope(self):
+        item=parse("elimina el último comprimido de descargas")
+        self.assertEqual(item.action,"pc_delete")
+        self.assertTrue(item.requires_confirmation)
+        self.assertEqual(item.args["kind"],"archive")
+        named=parse("elimina el archivo factura.pdf de descargas")
+        self.assertEqual(named.action,"pc_delete")
+        self.assertEqual(named.args["name"],"factura.pdf")
+        self.assertNotEqual(parse("elimina el directorio Windows").action,
+                            "pc_delete")
+
+    def test_direct_voice_call_cannot_bypass_yes(self):
+        from hover_next.app import run_one
+        executor=MagicMock()
+        with patch("hover_next.app.confirm_voice_intent") as popup, \
+             patch("hover_next.app.publish"):
+            self.assertIsNone(run_one("elimina el archivo factura.pdf de descargas",
+                                      executor,voice_mode=True))
+        popup.assert_not_called()
         executor.execute.assert_not_called()
 
 
@@ -187,6 +254,42 @@ class FileOperations(unittest.TestCase):
             "text":"Mantenimiento terminado"},{})
         self.assertEqual(file.read_text(encoding="utf-8"),
                          "Original\nMantenimiento terminado\n")
+
+    def test_trash_uses_send2trash(self):
+        import sys
+        src=self.dirs["downloads"]/"factura.pdf"
+        src.write_bytes(b"test")
+        args=pc_files.prepare_delete({
+            "pick":"name","name":"factura.pdf","location":"downloads"},{})
+        sender=MagicMock()
+        with patch.dict(sys.modules,{"send2trash":MagicMock(send2trash=sender)}):
+            result=pc_files.perform("pc_delete",args,{})
+        sender.assert_called_once_with(str(src))
+        self.assertIn("Papelera",result)
+
+    def test_trash_requires_frozen_target(self):
+        src=self.dirs["downloads"]/"factura.pdf"
+        src.write_bytes(b"test")
+        with self.assertRaises(pc_files.PCFileError):
+            pc_files.perform("pc_delete",{
+                "pick":"name","name":"factura.pdf","location":"downloads"},{})
+        self.assertTrue(src.exists())
+
+    def test_trash_rejects_changed_file(self):
+        src=self.dirs["downloads"]/"factura.pdf"
+        src.write_bytes(b"test")
+        frozen=pc_files.prepare_delete({
+            "pick":"name","name":"factura.pdf","location":"downloads"},{})
+        src.write_bytes(b"modified")
+        with self.assertRaisesRegex(pc_files.PCFileError,"cambió"):
+            pc_files.perform("pc_delete",frozen,{})
+        self.assertTrue(src.exists())
+
+    def test_trash_rejects_directory(self):
+        (self.dirs["downloads"]/"reports").mkdir()
+        with self.assertRaises(pc_files.PCFileError):
+            pc_files.prepare_delete({
+                "pick":"name","name":"reports","location":"downloads"},{})
 
     def test_reject_relative_parent_traversal(self):
         with self.assertRaises(ValueError):
