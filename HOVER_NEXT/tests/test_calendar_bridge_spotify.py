@@ -111,7 +111,7 @@ class SpotifyPlaybackTests(unittest.TestCase):
         with patch("hover_next.desktop.sys.platform","win32"), \
              patch("hover_next.desktop._spotify_session_play",
                    return_value="no_session"), \
-             patch("hover_next.desktop.time.sleep") as sleep, \
+             patch("time.sleep") as sleep, \
              patch("hover_next.desktop.send_media_key") as toggle, \
              patch("hover_next.desktop.os.startfile",create=True):
             message=desktop.spotify_start_playback(open_app=True,play=True)
