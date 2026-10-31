@@ -43,10 +43,11 @@ def _parse_private_repo_request(t: str) -> Intent | None:
         return None
     m = re.search(
         r'\b(?:que\s+se\s+llam(?:a|e)|llamad[oa]|con\s+el\s+nombre\s+de|nombre)\s+'
-        r'([a-z0-9][a-z0-9._-]{1,99})(?=$|[\s,;!?])', t)
+        r'([a-z0-9][a-z0-9._-]{0,99}(?:\s+(?!(?:en|para|con|que|y|privado)\b)[a-z0-9][a-z0-9._-]*){0,3})'
+        r'(?=$|[\s,;!?])', t)
     if not m:
         return Intent('repo_name_needed')
-    name = m.group(1).strip('.-')
+    name = '-'.join(m.group(1).split()).strip('.-')
     if not name or len(name)<2:
         return Intent('repo_name_needed')
     return Intent('create_private_repo',args={'name':name},requires_confirmation=True)
@@ -58,7 +59,9 @@ def parse(text: str) -> Intent:
     # Guard state-changing GitHub requests before generic web shortcuts.
     if re.fullmatch(r'(?:que puedes hacer|que sabes hacer|ayuda|comandos|mostrar comandos|lista de comandos)', t):
         return Intent('show_help')
-    repo_request = _parse_private_repo_request(t)
+    # The wake parser strips punctuation, including hyphens. For repo names,
+    # keep the original spelling and join spoken name words explicitly.
+    repo_request = _parse_private_repo_request(normalize(text))
     if repo_request is not None:
         return repo_request
     # ASR inserts "Oye" even after the wake phrase: "Hover. Oye Calculadora".
