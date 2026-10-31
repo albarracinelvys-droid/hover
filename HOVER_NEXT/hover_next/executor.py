@@ -56,6 +56,9 @@ class Executor:
             return 'Accion pendiente de confirmacion. No se ejecuto.'
         action=intent.action
         provider=intent.provider
+        if action in ('agent_ask','agent_task'):
+            from .agent import run_agent
+            return run_agent(intent.args.get('prompt',''),self.config,write=action=='agent_task')
         if action=='show_pc':
             subprocess.Popen(['explorer.exe','shell:MyComputerFolder'])
             return 'Abriendo Este equipo.'
