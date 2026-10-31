@@ -106,7 +106,7 @@ class GoogleExecutionTests(unittest.TestCase):
             with patch("hover_next.desktop.webbrowser.open_new_tab",return_value=True) as opener:
                 result=executor.execute(parse("Hover qué es un PLC"))
         opener.assert_called_once_with(
-            "https://www.google.com/search?q=qu%C3%A9+es+un+plc")
+            "https://www.google.com/search?q=qu%C3%A9+es+un+PLC")
         self.assertIn("Buscando en Google", result)
 
     def test_google_translate_url(self):
