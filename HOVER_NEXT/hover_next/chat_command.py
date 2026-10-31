@@ -50,8 +50,8 @@ _NEW_CHAT_AFTER_MARKER = re.compile(
     re.IGNORECASE,
 )
 _WAKE = re.compile(
-    r"^\s*(?:(?:oye|hey|hola|huji|uji)\s*[,¿?¡! ]*"
-    r"(?:hover|jover|over|llover|huver|hober|joven)\s*[,¿?¡!. ]*)",
+    r"^\s*(?:(?:oye|hey|hola|huji|uji)\s*[,¿?¡! ]*)?"
+    r"(?:hover|jover|over|llover|huver|hober|hoguer|joven)\b\s*[,¿?¡!. ]*",
     re.IGNORECASE,
 )
 
