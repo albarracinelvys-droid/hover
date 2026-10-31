@@ -64,6 +64,13 @@ class VoiceDialogue:
             return self.send_dictated(provider,spoken)
 
         if now < self.command_until or now < self.ptt_until:
+            from .wake import normalize_speech
+            filler = normalize_speech(spoken)
+            if filler in ("oye", "hey", "si", "ok", "hola", "hover"):
+                # A filler is not a complete command. Remain ready for the next phrase.
+                self.command_until = max(self.command_until, now + 8.0)
+                print("[listening] Espero la orden completa.",flush=True)
+                return "waiting"
             self.command_until = self.ptt_until = 0.0
             return self._command(spoken)
 
