@@ -63,6 +63,10 @@ class Executor:
             return 'Accion pendiente de confirmacion. No se ejecuto.'
         action=intent.action
         provider=intent.provider
+        if action == 'show_help':
+            return ('Comandos: calculadora, Word, Excel, GitHub, WhatsApp, Google, '
+                    'Drive, Gmail, Descargas, Administrador de tareas, volumen, '
+                    'musica y repositorios privados (requieren confirmacion).')
         if action == 'media_key':
             from .desktop import send_media_key
             return send_media_key(intent.args['key'])
