@@ -29,9 +29,38 @@ def identify_provider(t: str) -> str:
     return ''
 
 
+def _parse_private_repo_request(t: str) -> Intent | None:
+    """Repo creation requires: explicit create verb, private intent, and name.
+
+    The spoken syntax can freely order 'privado' and 'en GitHub'.
+    Never create a public repository or guess a truncated name.
+    """
+    if not re.search(r'\b(?:crea|crear|creame|creame|genera|generar)\b',t):
+        return None
+    if not re.search(r'\b(?:repo|repositorio)\b',t):
+        return None
+    if not re.search(r'\bprivad[oa]\b',t):
+        return None
+    m = re.search(
+        r'\b(?:que\s+se\s+llam(?:a|e)|llamad[oa]|con\s+el\s+nombre\s+de|nombre)\s+'
+        r'([a-z0-9][a-z0-9._-]{1,99})\b', t)
+    if not m:
+        return Intent('repo_name_needed')
+    name = m.group(1).strip('.-')
+    if not name or len(name)<2:
+        return Intent('repo_name_needed')
+    return Intent('create_private_repo',args={'name':name},requires_confirmation=True)
+
+
 def parse(text: str) -> Intent:
     spoken_command = extract_wake(text)
     t = spoken_command if spoken_command is not None else normalize(text)
+    # Guard state-changing GitHub requests before generic web shortcuts.
+    repo_request = _parse_private_repo_request(t)
+    if repo_request is not None:
+        return repo_request
+    # ASR inserts "Oye" even after the wake phrase: "Hover. Oye Calculadora".
+    t = re.sub(r'^(?:oye|hey|eh|ok|vale)\s+(?=calculadora\b|calc\b|google\b|github\b|chatgpt\b|claude\b|spotify\b|abre\b)', '',t)
     # The simple assistant routes named apps and chat dictation before legacy tools.
     from .chat_command import parse_chat_request
     from .direct_commands import parse_direct
@@ -54,9 +83,12 @@ def parse(text: str) -> Intent:
         return Intent('open_site','claude')
     if t in ('spotify','espotifai','spotifai'):
         return Intent('spotify_play','spotify')
-    if re.search(r'\b(crea|crear)\s+(?:un\s+)?(?:nuevo\s+)?repo(?:sitorio)?\s+(?:en\s+github\s+)?(?:privado\s+)?(?:llamado|que\s+se\s+llame)\s+([\w.-]+)', t):
-        name = re.search(r'(?:llamado|que\s+se\s+llame)\s+([\w.-]+)', t).group(1)
-        return Intent('create_private_repo', args={'name': name}, requires_confirmation=True)
+    if t in ('calculadora','la calculadora','calc'):
+        return Intent('windows_app',args={'app':'calculator'})
+    if t in ('github','git hub'):
+        return Intent('open_link',args={'site':'github'})
+    if t in ('google','el google'):
+        return Intent('google_app',args={'service':'google_home'})
     if ('ultimo archivo' in t or 'ultimo fichero' in t) and 'descargas' in t and any(x in t for x in ('mueve', 'traslada', 'copia')):
         return Intent('move_latest_download' if 'mueve' in t or 'traslada' in t else 'copy_latest_download', requires_confirmation=True)
     if any(x in t for x in ('adjunta', 'adjuntalo', 'adjuntala', 'sube', 'carga archivo', 'envia el archivo')):
