@@ -37,13 +37,13 @@ _SEARCH_PREFIX = re.compile(
 _QUESTION_PREFIX = re.compile(
     r"^(?:que\s+(?:es|son|significa|quiere\s+decir|pasa|ocurre|"
     r"debo|puedo|podria|diferencia\s+hay|relacion\s+hay)|"
-    r"quien(?:es)?\s+(?:es|son|fue|eran)|"
+    r"quien(?:es)?\b|"
     r"cual(?:es)?\s+(?:es|son|sera|seria|tiene|tienen)|"
     r"como(?:\s+se|\s+puedo|\s+hago|\s+funciona|\s+abrir|\s+crear|\s+)?|"
     r"por\s+que|para\s+que|de\s+que|"
     r"cuando|donde|a\s+donde|"
     r"cuant[oa]s?(?:\s+|$)|"
-    r"es\s+posible|se\s+puede|puedo|"
+    r"es\s+posible|se\s+puede|puedo|puedes|podrias|"
     r"cual\s+es\s+la\s+diferencia|"
     r"hay\s+alguna|existe|"
     r"en\s+que\s+se\s+diferencia)\b"
@@ -82,11 +82,8 @@ def information_request(utterance: str) -> tuple[str, dict[str, str]] | None:
         return None
     if _TRANSLATE_PREFIX.match(plain):
         # Extract the text from the original, preserving non-ASCII symbols.
-        payload = re.sub(
-            r"^(?:traduce(?:me)?|traducir|traduccion\s+de|"
-            r"traduceme|como\s+se\s+dice)\b\s*",
-            "", original, flags=re.IGNORECASE
-        ).strip(" :;,")
+        translation_prefix = _TRANSLATE_PREFIX.match(plain)
+        payload = original[translation_prefix.end():].strip(" :;,")
         # The user explicitly chooses the target language when present.
         # No target -> Google Translate defaults to English for Spanish speech.
         target = "en"
@@ -105,6 +102,9 @@ def information_request(utterance: str) -> tuple[str, dict[str, str]] | None:
     if explicit:
         # Extract after first initial verb, keeping C++, ñ and accents.
         content = original[explicit.start(1):].strip()
+        # A garbled "busca y ... busca and Google" is not a clear query.
+        if content.casefold().startswith(("y ", "and ")):
+            return None
         content = re.sub(
             r"^(?:en|por)\s+(?:google|internet|la web)\s+",
             "", content, flags=re.IGNORECASE
@@ -114,7 +114,7 @@ def information_request(utterance: str) -> tuple[str, dict[str, str]] | None:
             "", content, flags=re.IGNORECASE
         ).strip(" \t,.!?¿¡")
         if len(content) >= 2:
-            return "google_search", {"query": content}
+            return "google_search", {"query": content.casefold()}
         return "search_query_needed", {}
 
     if _QUESTION_PREFIX.match(plain) or _EXPLANATION_PREFIX.match(plain):
