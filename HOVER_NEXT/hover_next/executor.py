@@ -213,6 +213,9 @@ class Executor:
                                     intent.args.get('target','en'))
         if action == 'search_query_needed':
             return 'Repite la busqueda con un termino claro. Ejemplo: Hover busca iPhone en Google.'
+        if action == 'pc_name_needed':
+            return ('Dime SOLO el nombre del archivo o carpeta; lo crearé en '
+                    + intent.args.get("location","escritorio") + '.')
         if action == 'local_name_needed':
             return ('Dime el nombre del archivo o carpeta. Ejemplo: '
                     'Hover, en mi carpeta favorita crea un TXT llamado prueba1.')
