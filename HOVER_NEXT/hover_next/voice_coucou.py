@@ -186,7 +186,7 @@ class VoiceDialogue:
             command_text=(raw_command if raw_command is not None and
                           parsed.action in ("google_search","google_translate")
                           else remainder)
-            return self._command(command_text)
+            return self._command(command_text,preparsed=parsed)
 
         # HOVER prompted for this slot; don't require the wake phrase again.
         if self.pending_kind and now<self.pending_until:
@@ -240,13 +240,14 @@ class VoiceDialogue:
                    "pc_transfer","pc_rename","pc_create","pc_append"}
             if intent.action in allow:
                 print("[dialogo] Orden de seguimiento con 'Oye':",candidate,flush=True)
-                return self._command(candidate)
+                return self._command(candidate,preparsed=intent)
 
         print("[idle] No se reconocio el nombre Hover. Prueba F8.",flush=True)
         return "ignored"
 
-    def _command(self,utterance):
-        command=parse(utterance)
+    def _command(self,utterance,preparsed=None):
+        # Reuse the parsed action; don't call the local model twice.
+        command=preparsed if preparsed is not None else parse(utterance)
         if command.action=="unknown":
             publish("error","Orden no reconocida: "+utterance[:50])
             print("[accion] Sin coincidencia:",utterance,flush=True)
@@ -264,7 +265,11 @@ class VoiceDialogue:
             self._ask_name("repo")
             return "waiting"
 
-        result=self.execute(utterance)
+        # The live dispatcher consumes a validated Intent directly; test
+        # callbacks and explicit private-repo authorization keep spoken text.
+        deliver=(command if getattr(self.execute,"_hover_accepts_intent",False)
+                 and command.action!="create_private_repo" else utterance)
+        result=self.execute(deliver)
         if result is None:
             return "failed"
         self.recent_until=self.clock()+45.0
@@ -314,6 +319,7 @@ def run(executor, *, engine="auto", model="small",
     input_frames = int(round(sample_rate*0.03))
     audio_queue = Queue(maxsize=180)
     work_queue = Queue(maxsize=4)
+    google_queue = Queue(maxsize=8)
     vad = AdaptiveVad(minimum_rms=threshold)
     stop = threading.Event()
     error = []
@@ -334,9 +340,11 @@ def run(executor, *, engine="auto", model="small",
             print("[error]",type(exc).__name__,str(exc),flush=True)
             return "failed"
 
-    dialogue = VoiceDialogue(
-        lambda command:run_one(command,executor,voice_mode=True),
-        send_dictated)
+    def voice_dispatch(command):
+        return run_one(command,executor,voice_mode=True)
+
+    voice_dispatch._hover_accepts_intent=True
+    dialogue = VoiceDialogue(voice_dispatch,send_dictated)
 
     # Calendar refresh is independent of the audio/Whisper worker. The notch
     # only reads a small local snapshot while the user opens its Calendar tab.
@@ -355,20 +363,14 @@ def run(executor, *, engine="auto", model="small",
                     samples = work_queue.get(timeout=0.2)
                 except Empty:
                     continue
-                if isinstance(samples,tuple) and len(samples)==3 and samples[0]=="google":
-                    try:
-                        from .google_ipc import execute_control
-                        result=execute_control(samples[1],samples[2])
-                        print("[google]",result,flush=True)
-                    except Exception as exc:
-                        print("[google] Error de autorización:",type(exc).__name__,str(exc),flush=True)
-                        publish("error","Google: revisa la conexión OAuth.")
-                    finally:
-                        work_queue.task_done()
-                    continue
+                samples,queued_at=samples
+                started_at=time.monotonic()
+                queue_ms=(started_at-queued_at)*1000
                 print(f"[asr] Transcribiendo {len(samples)/16000:.1f}s con {recognizer.name}",flush=True)
                 try:
                     text = recognizer.transcribe(normalize_audio(samples))
+                    asr_ms=(time.monotonic()-started_at)*1000
+                    action_start=time.monotonic()
                     if text:
                         # Reject characteristic Whisper silence hallucinations.
                         noisy_phrases=("subtitulos realizados","subtitulos por la comunidad",
@@ -381,6 +383,12 @@ def run(executor, *, engine="auto", model="small",
                             dialogue.process(text)
                     else:
                         print("[asr] No hubo palabras claras. Intenta hablar mas cerca.",flush=True)
+                    action_ms=(time.monotonic()-action_start)*1000
+                    print(f"[latencia] cola={queue_ms:.0f}ms "
+                          f"asr={asr_ms:.0f}ms "
+                          f"interpretacion_y_accion={action_ms:.0f}ms "
+                          f"total={(time.monotonic()-queued_at)*1000:.0f}ms",
+                          flush=True)
                 except Exception as exc:
                     print("[asr] Error:",type(exc).__name__,exc,flush=True)
                     publish("error",str(exc))
@@ -398,6 +406,25 @@ def run(executor, *, engine="auto", model="small",
             except Exception as exc:
                 print("[chat] Error controlado al cerrar Chrome:",exc,flush=True)
 
+    def google_worker():
+        # OAuth and Google network calls are serial on their own thread so
+        # authorization never stalls speech transcription.
+        while not stop.is_set():
+            try:
+                service,operation=google_queue.get(timeout=0.2)
+            except Empty:
+                continue
+            try:
+                from .google_ipc import execute_control
+                result=execute_control(service,operation)
+                print("[google]",result,flush=True)
+            except Exception as exc:
+                print("[google] Error de autorización:",
+                      type(exc).__name__,str(exc),flush=True)
+                publish("error","Google: revisa la conexión OAuth.")
+            finally:
+                google_queue.task_done()
+
     def callback(indata, frame_count, ti, status):
         if status:
             print("[mic] Aviso del controlador:",status,flush=True)
@@ -410,7 +437,18 @@ def run(executor, *, engine="auto", model="small",
             except Full:pass
 
     worker=threading.Thread(target=recognizer_worker,name="HOVER-LocalASR",daemon=True)
+    google_thread=threading.Thread(target=google_worker,name="HOVER-GoogleOAuth",daemon=True)
     worker.start()
+    google_thread.start()
+
+    def warm_nlu_worker():
+        # Warm after mic and ASR initialization. Never delay audio capture.
+        if not stop.wait(3.0):
+            from .local_nlu import warm_model
+            warm_model()
+
+    threading.Thread(target=warm_nlu_worker,name="HOVER-QwenWarmup",
+                     daemon=True).start()
     publish("idle","HOVER listo")
     print(f"[ready] HOVER v5 | {recognizer.name} | {info['name']} | "
           f"dispositivo={device if device is not None else 'predeterminado'} "
@@ -437,7 +475,7 @@ def run(executor, *, engine="auto", model="small",
                     job=poll_control()
                     if job:
                         try:
-                            work_queue.put_nowait(("google",job[0],job[1]))
+                            google_queue.put_nowait((job[0],job[1]))
                             publish("thinking","Google: "+job[0]+" "+job[1],3)
                         except Full:
                             publish("error","Google: cola ocupada; reintenta.",3)
@@ -461,7 +499,7 @@ def run(executor, *, engine="auto", model="small",
                     last_meter=now
                 if segment is not None:
                     try:
-                        work_queue.put_nowait(segment)
+                        work_queue.put_nowait((segment,time.monotonic()))
                     except Full:
                         print("[asr] Cola llena, se descarto un segmento antiguo.",flush=True)
     except KeyboardInterrupt:
@@ -469,6 +507,7 @@ def run(executor, *, engine="auto", model="small",
     finally:
         stop.set()
         worker.join(timeout=2.0)
+        google_thread.join(timeout=1.0)
         publish("idle","")
     if error:
         raise RuntimeError("El reconocedor se detuvo: "+str(error[0]))

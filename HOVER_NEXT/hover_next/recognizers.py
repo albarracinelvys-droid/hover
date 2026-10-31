@@ -111,8 +111,14 @@ class WhisperRecognizer:
     def transcribe(self, audio):
         # Coucou's wake-word examples motivate a contextual vocabulary for the
         # fallback. Temperature zero avoids some Whisper hallucinations.
+        # Smaller beam reduces CPU decoding work for short PC commands.
+        # Set HOVER_WHISPER_BEAM=5 to favor accuracy on difficult audio.
+        try:
+            beam=max(1,min(5,int(os.environ.get("HOVER_WHISPER_BEAM","3"))))
+        except ValueError:
+            beam=3
         segments, _ = self.model.transcribe(
-            audio, language="es", beam_size=5, temperature=0,
+            audio, language="es", beam_size=beam, temperature=0,
             condition_on_previous_text=False, vad_filter=False,
             initial_prompt=(
                 "El usuario habla español con HOVER, su asistente de Windows. "
