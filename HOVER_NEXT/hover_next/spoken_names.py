@@ -20,6 +20,9 @@ def _normal(text: str) -> str:
 def spoken_name(text: str, kind: str = "txt") -> str:
     if kind not in ("txt","folder","excel","repo"):
         return ""
+    # Reject paths before normalization removes punctuation.
+    if "/" in text or "\\" in text or ":" in text or ".." in text:
+        return ""
     value = _normal(text).strip(" .-")
     # The current voice dialogue has explicitly asked for the name.
     value = re.sub(
