@@ -86,6 +86,9 @@ def execute_control(action,service):
             existing_email=(google_auth.account_email(already[0]).casefold()
                             if already else "")
             google_auth.connect(key)
+            if key=="calendar":
+                from .calendar_bridge import request_refresh
+                request_refresh()
             try:
                 new_email=google_auth.account_email(key).casefold()
             except Exception as exc:
