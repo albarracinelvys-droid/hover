@@ -206,6 +206,7 @@ class VSCodeLogIsolationTests(unittest.TestCase):
         from hover_next import desktop
         from subprocess import DEVNULL
         with patch("shutil.which",return_value="C:/Mock/Code.exe"), \
+             patch("hover_next.desktop.sys.platform","win32"), \
              patch("hover_next.desktop.os.path.isfile",return_value=True), \
              patch("hover_next.desktop.subprocess.Popen") as launch:
             message=desktop.open_windows_app("vscode")
