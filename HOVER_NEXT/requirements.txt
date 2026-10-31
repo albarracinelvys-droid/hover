@@ -2,3 +2,4 @@ faster-whisper>=1.0,<2
 sounddevice>=0.4,<1
 numpy>=1.26,<3
 playwright>=1.55,<2
+pywin32>=306; sys_platform == 'win32'
