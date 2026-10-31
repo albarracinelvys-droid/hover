@@ -141,6 +141,15 @@ def parse(text: str) -> Intent:
     if goog is not None:
         action,args,confirm=goog
         return Intent(action,args=args,requires_confirmation=confirm)
+    # Recognize explicit and polite file-management imperatives BEFORE
+    # information questions. Otherwise "puedes mover el último ZIP" is
+    # incorrectly routed to a public Google search.
+    # Fully scoped commands only: named user folders, bounded file types.
+    from .pc_commands import parse_pc_command
+    pc = parse_pc_command(t)
+    if pc is not None:
+        action, args = pc
+        return Intent(action,args=args,requires_confirmation=True)
     # Natural information questions always go to Google before any app/file
     # routing: "como crear un repo" is research, NOT a repo creation command.
     # Explicit imperatives such as "crea un repositorio" do not match.
