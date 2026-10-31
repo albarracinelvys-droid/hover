@@ -30,36 +30,52 @@ def identify_provider(t: str) -> str:
 
 
 def _parse_private_repo_request(t: str) -> Intent | None:
-    """Parse private GitHub repository names and trailing visibility phrases."""
-    repository = r'(?:repo(?:sitorio)?s?|requisitori[oa]s?)'
+    """Only explicitly private GitHub repositories may be auto-created.
+
+    ASR often hears "repositoria" for repositorio or "abre un nuevo
+    repositorio" when the user intended "crea". Ambiguous transcripts
+    start a short, separate naming dialogue rather than guessing a repo.
+    """
+    repository = r'(?:repo(?:sitori[oa])?s?|requisitori[oa]s?)'
     if not re.search(r'\b' + repository + r'\b', t):
         return None
-    if not re.search(r'\bprivad[oa]s?\b', t):
+    private = bool(re.search(r'\bprivad[oa]s?\b',t))
+    explicit = bool(re.search(
+        r'\b(?:crea|crear|creame|genera|generar)\b',t))
+    tentative = bool(re.search(
+        r'\b(?:poder\s+crear|podria(?:s)?\s+crear|puede(?:s)?\s+crear|'
+        r'seria\s+uno\s+de\s+los)\b',t))
+    open_new = bool(re.search(r'\b(?:abre|abrir)\b',t)
+                    and re.search(r'\b(?:nuevo|nueva)\b',t))
+    if not explicit and not tentative and not open_new:
         return None
-    explicit = re.search(r'\b(?:crea|crear|creame|genera|generar)\b', t)
-    uncertain = re.search(
-        r'\bseria\s+uno\s+de\s+los\s+' + repository + r'\b', t)
-    if not explicit and not uncertain:
-        return None
+
+    # A missing or uncertain privacy statement must never cause a public
+    # repository to be created (nor allow automatic private creation).
+    required = {'require_private': not private}
+    if open_new or tentative:
+        return Intent('repo_name_needed',args=required)
+
     marker = re.search(
         r'\b(?:que\s+se\s+llam(?:a|e)|que\s+ya\s+me|que\s+llame|'
         r'llamad[oa]|con\s+el\s+nombre\s+de|nombre(?:\s+de)?)'
-        r'\s*[,;:]?\s+(.+)$', t)
+        r'\s*[,;:]?\s*(.*)$', t)
     if not marker:
-        return Intent('repo_name_needed')
+        return Intent('repo_name_needed',args=required)
     raw_name = marker.group(1).strip(' \t.,;!?:')
     raw_name = re.sub(
         r'\s+(?:en\s+privad[oa]|de\s+forma\s+privad[oa]|'
         r'como\s+privad[oa]|privad[oa])$', '', raw_name).strip()
     words = raw_name.split()
-    if not 1 <= len(words) <= 4:
-        return Intent('repo_name_needed')
-    if any(not re.fullmatch(r'[a-z0-9][a-z0-9._-]*',w) for w in words):
-        return Intent('repo_name_needed')
+    if (not private or not 1 <= len(words) <= 4
+            or any(not re.fullmatch(r'[a-z0-9][a-z0-9._-]*',w)
+                   for w in words)):
+        return Intent('repo_name_needed',args=required)
     name='-'.join(words).strip('.-')
     if not 2 <= len(name) <= 80:
-        return Intent('repo_name_needed')
-    return Intent('create_private_repo',args={'name':name},requires_confirmation=True)
+        return Intent('repo_name_needed',args=required)
+    return Intent('create_private_repo',args={'name':name},
+                  requires_confirmation=True)
 
 
 def _parse_google_search(t: str) -> Intent | None:
