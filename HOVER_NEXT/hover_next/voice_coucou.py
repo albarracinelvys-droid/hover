@@ -41,6 +41,7 @@ class VoiceDialogue:
         self.dictation_until = 0.0
         self.pending_kind = ""
         self.pending_until = 0.0
+        self.pending_repo_private_required = False
         self.recent_until = 0.0
         self.recent_action = ""
 
@@ -49,12 +50,17 @@ class VoiceDialogue:
         publish("listening", "Comando por F8")
         print("[F8] Di ahora tu orden, sin decir Hover.",flush=True)
 
-    def _ask_name(self, kind):
+    def _ask_name(self, kind, *, private_required=False):
         if kind not in ("txt","excel","folder","repo"):
             return
         self.pending_kind = kind
         self.pending_until = self.clock()+45.0
-        prompt = "Dime SOLO el nombre para "+("repositorio privado" if kind=="repo" else kind)
+        self.pending_repo_private_required = (kind=="repo" and private_required)
+        prompt = (
+            'Di el nombre y termina con "en privado"'
+            if self.pending_repo_private_required else
+            "Dime SOLO el nombre para "+("repositorio privado" if kind=="repo" else kind)
+        )
         print("[dialogo]",prompt,flush=True)
         publish("listening",prompt,3)
 
@@ -64,16 +70,23 @@ class VoiceDialogue:
         clean = normalize_speech(spoken)
         if clean in ("cancela","cancelar","no","olvidalo","cancelalo"):
             self.pending_kind=""
+            self.pending_repo_private_required=False
             publish("ok","Solicitud cancelada")
             print("[dialogo] Cancelado por voz.",flush=True)
             return "cancel"
         kind=self.pending_kind
+        if (kind=="repo" and self.pending_repo_private_required and
+                not __import__("re").search(r"\bprivad[oa]\b",clean)):
+            publish("listening",'Di el nombre y termina con "en privado"',3)
+            print("[dialogo] Falta indicar que el repositorio será privado.",flush=True)
+            return "waiting"
         name=spoken_name(spoken,kind)
         if not name:
             print("[dialogo] Nombre poco claro; sigo esperando un nombre corto.",flush=True)
             publish("listening","Repite solo el nombre",3)
             return "waiting"
         self.pending_kind=""
+        self.pending_repo_private_required=False
         if kind=="repo":
             command=f"crea un repositorio privado llamado {name}"
         elif kind=="folder":
@@ -123,6 +136,7 @@ class VoiceDialogue:
             return "waiting"
         if self.pending_kind and now>=self.pending_until:
             self.pending_kind=""
+            self.pending_repo_private_required=False
         if self.dictation_provider and now>=self.dictation_until:
             self.dictation_provider=""
 
@@ -258,7 +272,7 @@ class VoiceDialogue:
             publish("listening","Dicta tu mensaje para "+command.provider)
             print("[dictado] Di tu mensaje ahora; no necesitas Hover.",flush=True)
         elif command.action=="repo_name_needed":
-            self._ask_name("repo")
+            self._ask_name("repo",private_required=bool(command.args.get("require_private")))
         elif command.action=="local_name_needed":
             self._ask_name(command.args.get("kind","txt"))
         return "action"
