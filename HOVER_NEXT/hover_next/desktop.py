@@ -1,0 +1,150 @@
+"""Safe, direct Windows and Google shortcuts for HOVER.
+
+No arbitrary programs or shell commands are generated from speech.
+Microsoft Word requires local Word + optional pywin32.
+Google services open in the default browser, using the user's existing session.
+"""
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import webbrowser
+from pathlib import Path
+
+GOOGLE_URLS: dict[str, str] = {
+    "google_drive": "https://drive.google.com/drive/u/0/my-drive",
+    "google_docs": "https://docs.google.com/",
+    "google_docs_new": "https://docs.google.com/create",
+    "google_sheets": "https://sheets.google.com/",
+    "google_sheets_new": "https://sheets.google.com/create",
+    "google_slides": "https://slides.google.com/",
+    "google_slides_new": "https://slides.google.com/create",
+    "google_calendar": "https://calendar.google.com/calendar/u/0/r",
+    "google_gmail": "https://mail.google.com/mail/u/0/#inbox",
+    "google_maps": "https://www.google.com/maps",
+    "google_meet": "https://meet.google.com/",
+    "google_keep": "https://keep.google.com/",
+    "google_youtube": "https://www.youtube.com/",
+    "google_photos": "https://photos.google.com/",
+    "google_translate": "https://translate.google.com/",
+}
+DOCUMENT_TYPES = {".docx", ".xlsx", ".pptx", ".pdf", ".txt", ".csv", ".odt", ".ods", ".odp"}
+
+class ActionUnavailable(RuntimeError):
+    pass
+
+
+def open_google(service: str) -> str:
+    url = GOOGLE_URLS.get(service)
+    if not url:
+        raise ActionUnavailable("Servicio Google desconocido.")
+    if not webbrowser.open_new_tab(url):
+        raise ActionUnavailable("No pude solicitar al navegador que abra Google.")
+    return f"Abriendo {service.replace('_', ' ')}. Comprueba el inicio de sesión."
+
+
+def open_windows_app(app: str) -> str:
+    if sys.platform != "win32":
+        raise ActionUnavailable("Esta acción requiere Windows.")
+    allowed = {
+        "calculator": "calc.exe",
+        "notepad": "notepad.exe",
+        "paint": "mspaint.exe",
+        "explorer": "explorer.exe",
+    }
+    executable = allowed.get(app)
+    if executable is None:
+        raise ActionUnavailable("Aplicación no permitida.")
+    subprocess.Popen([executable], shell=False)
+    return {"calculator":"Calculadora abierta.", "notepad":"Bloc de notas abierto.",
+            "paint":"Paint abierto.", "explorer":"Explorador abierto."}[app]
+
+
+def new_word_document() -> str:
+    if sys.platform != "win32":
+        raise ActionUnavailable("Word local requiere Windows.")
+    try:
+        import win32com.client
+    except ImportError as exc:
+        raise ActionUnavailable(
+            "Para crear un documento nuevo en Word instalado, ejecuta: "
+            r".\.venv\Scripts\python.exe -m pip install pywin32"
+        ) from exc
+    try:
+        word = win32com.client.Dispatch("Word.Application")
+        word.Visible = True
+        word.Documents.Add()
+    except Exception as exc:
+        raise ActionUnavailable(
+            "No pude crear el documento: comprueba que Microsoft Word esté instalado y activado."
+        ) from exc
+    return "Documento nuevo de Word abierto; todavía no está guardado."
+
+
+def _selected_explorer_path() -> Path | None:
+    """Only use the selected item of the foreground Windows Explorer window."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        import win32com.client
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        shell = win32com.client.Dispatch("Shell.Application")
+        for window in shell.Windows():
+            if int(window.HWND) != int(hwnd):
+                continue
+            selection = window.Document.SelectedItems()
+            if selection.Count != 1:
+                return None
+            return Path(selection.Item(0).Path)
+    except Exception:
+        return None
+    return None
+
+
+def _document_roots() -> list[Path]:
+    home = Path.home()
+    roots = [home/"Documents", home/"Downloads", home/"Desktop",
+             home/"OneDrive"/"Documents", home/"OneDrive"/"Desktop"]
+    return [p for p in roots if p.is_dir()]
+
+
+def _find_named_document(name: str) -> Path:
+    wanted = name.casefold().strip()
+    if len(wanted) < 2:
+        raise ActionUnavailable("Dime un nombre más específico del documento.")
+    matches: list[Path] = []
+    for root in _document_roots():
+        # Only two folder levels: avoid searching huge directory trees.
+        for pattern in ("*", "*/*", "*/*/*"):
+            for path in root.glob(pattern):
+                if path.is_file() and path.suffix.lower() in DOCUMENT_TYPES:
+                    if wanted in path.stem.casefold():
+                        matches.append(path)
+                        if len(matches) >= 12:
+                            break
+            if len(matches) >= 12:
+                break
+    distinct = list(dict.fromkeys(p.resolve() for p in matches))
+    if not distinct:
+        raise ActionUnavailable(f"No encontré un documento llamado {name!r} en Documentos o Descargas.")
+    if len(distinct) > 1:
+        preview = ", ".join(p.name for p in distinct[:4])
+        raise ActionUnavailable(f"Encontré varios documentos: {preview}. Dime un nombre más preciso.")
+    return distinct[0]
+
+
+def open_document(name: str = "") -> str:
+    if sys.platform != "win32":
+        raise ActionUnavailable("Abrir documentos locales requiere Windows.")
+    target = _find_named_document(name) if name else _selected_explorer_path()
+    if target is None:
+        raise ActionUnavailable(
+            "Selecciona un único documento en el Explorador o dime su nombre. "
+            "Por ejemplo: Hover, abre el documento Taller 3."
+        )
+    if not target.is_file() or target.suffix.lower() not in DOCUMENT_TYPES:
+        raise ActionUnavailable("Solo abro documentos de formatos permitidos, no programas ni scripts.")
+    os.startfile(str(target))
+    return f"Documento abierto: {target.name}"
