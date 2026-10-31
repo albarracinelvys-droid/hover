@@ -25,7 +25,7 @@ def provider_name(text: str) -> str:
     t = _norm(text)
     if re.search(r"\b(?:chat\s*gpt|chatgpt|chat\s*gepete|chat\s*e\s*pepe|cati\s*petit)\b", t):
         return "chatgpt"
-    if re.search(r"\b(?:claude|cloud|clau|clod)\b", t):
+    if re.search(r"\b(?:claude|cloud|clau|clod|clout|clouding|cloude)\b", t):
         return "claude"
     return ""
 
