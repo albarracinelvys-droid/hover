@@ -1,20 +1,13 @@
-"""Whisper local voice listener with explicit wake phrase.
-
-The recognizer captures five-second audio windows. This is a test harness,
-not a continuous low-latency hotword engine, and cannot identify a speaker.
-"""
+"""Whisper local listener with real-time microphone diagnostics."""
 from __future__ import annotations
-
 import time
-
-import numpy as np
 
 from .app import run_one
 from .wake import extract_wake
+from .audio import microphone_events
 
 
 def _wake_feedback():
-    # This is only audio feedback, not synthesized voice or authentication.
     try:
         import winsound
         winsound.Beep(880, 120)
@@ -22,57 +15,65 @@ def _wake_feedback():
         pass
 
 
-def run_voice(executor, model_name="small"):
-    import sounddevice as sd
+def test_microphone(device=None, threshold: float = 0.0008, duration: float = 15):
+    print("[diagnóstico] Habla cerca del micrófono; verás el RMS sin iniciar Whisper.")
+    try:
+        for _kind, _payload in microphone_events(
+                device=device, threshold=threshold, diagnostic=True, duration=duration):
+            pass
+    except KeyboardInterrupt:
+        print("[diagnóstico] Detenido.")
+    except Exception as exc:
+        print(f"[ERROR micrófono] {type(exc).__name__}: {exc}")
+        raise
+    print("[diagnóstico] Finalizado.")
+
+
+def run_voice(executor, model_name="small", device=None, threshold: float = 0.0008):
     from faster_whisper import WhisperModel
 
-    print("Cargando Whisper local:", model_name, flush=True)
+    print("[asr] Cargando Whisper local:", model_name, flush=True)
     model = WhisperModel(model_name, device="cpu", compute_type="int8")
-    sr = 16000
+    print("[ready] Whisper preparado. Escucha por actividad de voz.", flush=True)
+    print("Di: 'Oye Hover' o 'Oye Hover, abre ChatGPT'. Ctrl+C para detener.", flush=True)
+    print("Si nunca aparece '[asr] Voz detectada', ejecuta --mic-test.", flush=True)
     awaiting = False
     wake_deadline = 0.0
-    try:
-        print("Micrófono:", sd.query_devices(kind="input")["name"])
-    except Exception as exc:
-        print("No se pudo consultar el micrófono predeterminado:", exc)
-    print("Di: Oye Hover. Ctrl+C para detener. El audio se transcribe localmente.")
-    print("Nota: cada bloque de escucha tarda 5 segundos más el procesamiento de Whisper.")
 
     try:
-        while True:
-            audio = sd.rec(int(5.0 * sr), samplerate=sr, channels=1, dtype="float32")
-            sd.wait()
-            samples = np.asarray(audio, dtype=np.float32).reshape(-1)
-            if float(np.sqrt(np.mean(samples * samples))) < 0.005:
+        for event, audio in microphone_events(device=device, threshold=threshold):
+            if event != "segment":
                 continue
-
             segments, _ = model.transcribe(
-                samples, language="es", beam_size=5, vad_filter=True,
+                audio, language="es", beam_size=5, vad_filter=True,
                 condition_on_previous_text=False,
             )
             spoken = " ".join(s.text.strip() for s in segments).strip()
             if not spoken:
+                print("[asr] No hubo palabras suficientemente claras.", flush=True)
                 continue
 
-            print("Reconocido:", spoken)
+            print("Reconocido:", spoken, flush=True)
             command = extract_wake(spoken)
-
             if command is not None:
                 _wake_feedback()
                 if not command:
                     awaiting = True
-                    wake_deadline = time.monotonic() + 12.0
-                    print("[listening] Oye Hover detectado. Te escucho.")
+                    wake_deadline = time.monotonic() + 15.0
+                    print("[listening] Oye Hover detectado. Te escucho.", flush=True)
                     continue
                 awaiting = False
-                print("[wake] Activacion reconocida. Orden:", command)
+                print("[wake] Orden:", command, flush=True)
                 run_one(command, executor)
             elif awaiting and time.monotonic() <= wake_deadline:
                 awaiting = False
-                print("[wake] Orden posterior:", spoken)
+                print("[wake] Orden posterior:", spoken, flush=True)
                 run_one(spoken, executor)
             else:
                 awaiting = False
-                print("[idle] No se detecto 'Oye Hover' al inicio; no se ejecuto nada.")
+                print("[idle] No se detectó 'Oye Hover' al principio de la frase.", flush=True)
     except KeyboardInterrupt:
         print("HOVER detenido.")
+    except Exception as exc:
+        print(f"[ERROR voz] {type(exc).__name__}: {exc}", flush=True)
+        raise
