@@ -13,6 +13,7 @@ import webbrowser
 from pathlib import Path
 
 GOOGLE_URLS: dict[str, str] = {
+    "google_home": "https://www.google.com/",
     "google_drive": "https://drive.google.com/drive/u/0/my-drive",
     "google_docs": "https://docs.google.com/",
     "google_docs_new": "https://docs.google.com/create",
