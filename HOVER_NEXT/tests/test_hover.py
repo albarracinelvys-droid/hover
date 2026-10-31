@@ -27,6 +27,14 @@ class WakeTests(unittest.TestCase):
 
 
 class IntentTests(unittest.TestCase):
+    def test_agent_question(self):
+        i=parse('Oye Hover explica el funcionamiento de un motor')
+        self.assertEqual(i.action,'agent_ask')
+        self.assertFalse(i.requires_confirmation)
+    def test_agent_edit_requires_confirmation(self):
+        i=parse('Oye Hover desarrolla un programa para organizar archivos')
+        self.assertEqual(i.action,'agent_task')
+        self.assertTrue(i.requires_confirmation)
     def test_chatgpt(self):
         i=parse('Oye Hover, abre ChatGPT')
         self.assertEqual((i.action,i.provider),('open_site','chatgpt'))
