@@ -32,14 +32,6 @@ def parse_pc_command(text: str):
     """Return (action,args) for a bounded file command, or None."""
     t=_clean(text)
     # "Oye, puedes mover el último comprimido de descargas a escritorio."
-    m=re.fullmatch(
-        r"(mueve|mover|traslada|trasladar|copia|copiar)\s+"
-        r"(?:el|la)?\s*(?:ultimo|ultima|mas reciente)\s+"
-        r"(?:(?:archivo|fichero)\s+)?"
-        r"(comprimido|zip|rar|pdf|excel|imagen|foto|texto|txt|archivo|fichero|documento)\s+"
-        r"(?:de|desde|en)\s+(?:(?:la|el)\s+)?(?:(?:carpeta de|carpeta)\s+)?"
-        +LOC+
-        r"\s+(?:a|al|hacia)\s+(?:(?:el|la|mi)\s+)?"+LOC,r"".join([])) if False else None
     # The complete pattern is assembled here to avoid ambiguous free-form
     # path extraction. No shell paths or recursively searched files.
     transfer=(r"(mueve|mover|traslada|trasladar|copia|copiar)\s+"
