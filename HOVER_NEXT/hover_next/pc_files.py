@@ -225,10 +225,11 @@ def create_saved_file(folder: Path, kind: str, name: str) -> str:
         wb.active.title="Hoja1"
         try:
             with target.open("xb") as handle:
-                wb.save(handle)
-        except Exception:
-            target.unlink(missing_ok=True)
-            raise
+                try:
+                    wb.save(handle)
+                except Exception:
+                    target.unlink(missing_ok=True)
+                    raise
         finally:
             wb.close()
     elif kind=="word":
@@ -236,12 +237,12 @@ def create_saved_file(folder: Path, kind: str, name: str) -> str:
             from docx import Document
         except ImportError as exc:
             raise PCFileError("Falta python-docx. Instala requirements.txt.") from exc
-        try:
-            with target.open("xb") as handle:
+        with target.open("xb") as handle:
+            try:
                 Document().save(handle)
-        except Exception:
-            target.unlink(missing_ok=True)
-            raise
+            except Exception:
+                target.unlink(missing_ok=True)
+                raise
     if not target.is_file() or target.stat().st_size==0 and kind in ("excel","word"):
         raise PCFileError("El archivo no se pudo guardar correctamente.")
     return f"Creé y guardé el archivo {target}."
