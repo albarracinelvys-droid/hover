@@ -9,6 +9,7 @@ import time
 from collections import deque
 
 from .app import run_one
+from .intent import Intent, parse
 from .wake import extract_wake
 from .ui_bridge import publish
 
@@ -79,11 +80,26 @@ def run_voice(executor,model_name="small",device=None,threshold=0.0008):
     model=WhisperModel(model_name,device="cpu",compute_type="int8")
     awaiting=False
     deadline=0.0
+    chat_provider=None
+    chat_deadline=0.0
     print("[ready] HOVER esta escuchando. No utilizara voz sintetizada ni pitidos.",flush=True)
     publish("idle","Oye Hover para dar una orden")
 
+    def execute_voice_command(command):
+        nonlocal chat_provider, chat_deadline
+        interpreted=parse(command)
+        result=run_one(command,executor)
+        if interpreted.action=="chat_prepare" and result is not None:
+            chat_provider=interpreted.provider
+            chat_deadline=time.monotonic()+60.0
+            publish("listening","Dicta el mensaje para "+chat_provider)
+            print("[dictado] Di ahora el texto que quieres enviar.",flush=True)
+        else:
+            chat_provider=None
+        return result
+
     def heard(audio):
-        nonlocal awaiting,deadline
+        nonlocal awaiting,deadline,chat_provider,chat_deadline
         segments,_=model.transcribe(audio,language="es",beam_size=5,
                                     vad_filter=True,condition_on_previous_text=False)
         spoken=" ".join(s.text.strip() for s in segments).strip()
@@ -99,12 +115,31 @@ def run_voice(executor,model_name="small",device=None,threshold=0.0008):
                 publish("listening","Te escucho")
                 return
             awaiting=False
-            run_one(command,executor)
+            execute_voice_command(command)
+        elif chat_provider and time.monotonic()<=chat_deadline:
+            provider=chat_provider
+            chat_provider=None
+            if spoken.casefold().strip(" !?.") in ("cancelar","cancela","no enviar"):
+                publish("ok","Dictado cancelado")
+                print("[dictado] Cancelado.",flush=True)
+                return
+            print("[dictado] Mensaje para",provider,":",spoken,flush=True)
+            publish("thinking","Enviando mensaje a "+provider)
+            try:
+                result=executor.execute(
+                    Intent("chat_send_prepared",provider=provider,args={"prompt":spoken}),confirmed=True
+                )
+                publish("ok",str(result),3)
+                print("[ok]",result,flush=True)
+            except Exception as exc:
+                publish("error",str(exc))
+                print("[error]",type(exc).__name__,str(exc),flush=True)
         elif awaiting and time.monotonic()<=deadline:
             awaiting=False
-            run_one(spoken,executor)
+            execute_voice_command(spoken)
         else:
             awaiting=False
+            chat_provider=None
             print("[idle] Frase sin activacion; ignorada",flush=True)
 
     try:
