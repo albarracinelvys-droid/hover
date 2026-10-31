@@ -1,0 +1,7 @@
+# Optional: installed Windows Google OAuth + Workspace APIs
+google-api-python-client>=2.130,<3
+google-auth-oauthlib>=1.2,<2
+google-auth-httplib2>=0.2,<1
+google-auth>=2.29,<3
+requests>=2.31,<3
+pywin32>=306; sys_platform == "win32"
