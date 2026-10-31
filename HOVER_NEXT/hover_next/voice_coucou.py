@@ -104,12 +104,19 @@ class VoiceDialogue:
                 publish("listening","Te escucho")
                 print("[wake] HOVER detectado. Di tu orden.",flush=True)
                 return "wake"
-            parsed=parse(remainder)
+            # Keep the raw transcription for Google: the normalized wake
+            # detector deliberately strips symbols like C++ and accents.
+            from .information_queries import remove_wake_preserving_text
+            raw_command=remove_wake_preserving_text(spoken)
+            parsed=parse(raw_command if raw_command is not None else remainder)
             if self.pending_kind and parsed.action=="unknown":
                 return self._handle_name(remainder)
             self.pending_kind=""
             self.command_until=0.0
-            return self._command(remainder)
+            command_text=(raw_command if raw_command is not None and
+                          parsed.action in ("google_search","google_translate")
+                          else remainder)
+            return self._command(command_text)
 
         # HOVER prompted for this slot; don't require the wake phrase again.
         if self.pending_kind and now<self.pending_until:
