@@ -138,7 +138,8 @@ class VoiceDialogue:
                 replacement=parse(candidate)
                 safe={"local_name_needed","create_local","google_search",
                       "google_app","windows_app","office_new","open_link",
-                      "media_key","spotify_play","spotify_resume"}
+                      "media_key","spotify_play","spotify_resume",
+                      "pc_close_window","pc_create","pc_name_needed"}
                 if replacement.action in safe:
                     print("[dialogo] Cambiando solicitud pendiente a:",candidate,flush=True)
                     self.pending_kind=""
