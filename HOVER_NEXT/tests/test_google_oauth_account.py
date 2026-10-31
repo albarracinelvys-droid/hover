@@ -240,6 +240,35 @@ class GoogleIpcTests(unittest.TestCase):
                 ipc.CONTROL.write_text(text,encoding="utf-8")
                 self.assertIsNone(ipc.poll_control())
 
+    def test_reject_google_account_mismatch(self):
+        with patch("hover_next.google_auth.status",side_effect=[
+             {"drive":True,"calendar":False,"gmail":False,"docs":False},
+             {"drive":True,"calendar":False,"gmail":False,"docs":False}]), \
+             patch("hover_next.google_auth.account_email",
+                   side_effect=["owner@example.com","other@example.com"]), \
+             patch("hover_next.google_auth.connect") as connect, \
+             patch("hover_next.google_auth.disconnect") as disconnect, \
+             patch("hover_next.google_ipc.write_status"), \
+             patch("hover_next.ui_bridge.publish"):
+            result=ipc.execute_control("connect","calendar")
+        connect.assert_called_once_with("calendar")
+        disconnect.assert_called_once_with("calendar")
+        self.assertIn("calendar:",result)
+
+    def test_drop_new_token_when_identity_lookup_fails(self):
+        with patch("hover_next.google_auth.status",return_value={
+             "drive":False,"calendar":False,"gmail":False,"docs":False}), \
+             patch("hover_next.google_auth.connect") as connect, \
+             patch("hover_next.google_auth.account_email",
+                   side_effect=RuntimeError("userinfo unavailable")), \
+             patch("hover_next.google_auth.disconnect") as disconnect, \
+             patch("hover_next.google_ipc.write_status"), \
+             patch("hover_next.ui_bridge.publish"):
+            result=ipc.execute_control("connect","gmail")
+        connect.assert_called_once_with("gmail")
+        disconnect.assert_called_once_with("gmail")
+        self.assertIn("gmail:",result)
+
     def test_status_has_only_flags_and_message_not_tokens(self):
         with patch("hover_next.google_auth.status",return_value={
              "drive":True,"calendar":False,"gmail":True,"docs":False}):
