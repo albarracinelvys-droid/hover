@@ -1,0 +1,12 @@
+{
+  "downloads": "C:\\Users\\gomez\\Downloads",
+  "folder": "",
+  "projects": {
+    "chatgpt": {
+      "zap": "https://chatgpt.com/g/g-example"
+    },
+    "claude": {
+      "proyecto-trabajo": "https://claude.ai/project/REEMPLAZAR"
+    }
+  }
+}
