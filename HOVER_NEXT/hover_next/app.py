@@ -20,10 +20,10 @@ def voice_may_autocreate_private_repo(command, intent) -> bool:
     from .intent import normalize
     import re
     from .wake import extract_wake
+    # VoiceDialogue strips the wake phrase BEFORE calling run_one;
+    # direct tests may still supply the full utterance.
     spoken = extract_wake(command)
-    if spoken is None:
-        return False
-    t = normalize(spoken)
+    t = normalize(spoken if spoken is not None else command)
     if not re.search(r'\b(?:crea|crear|creame|genera)\b', t):
         return False
     if not re.search(r'\b(?:repositorio|repo)\b', t):
