@@ -1,3 +1,43 @@
+## Correcciones de cierre y carpeta favorita (31 de octubre de 2026)
+
+El motor de voz mantiene Whisper y los controles existentes; el navegador
+automatizado se crea y cierra en el mismo hilo para evitar el error
+\`greenlet.error: Cannot switch to a different thread\` al pulsar Ctrl+C.
+
+**Consultas y búsquedas:** no piden confirmar con SI.
+
+**Crear un repositorio privado**: aparece una ventana de confirmación de
+Windows con el nombre reconocido; confirma solo si coincide exactamente.
+Ya no se usa \`input()\` dentro del hilo de reconocimiento. El repositorio
+requiere GitHub CLI instalado y autenticado.
+
+**Carpeta seleccionada en la isla:** usa el destino que Windhawk guarda en
+\`%APPDATA%\HOVER\carpeta_favorita.txt\` (UTF-16). Selecciónalo desde
+Atajos con clic derecho en **Carpeta**, si todavía no lo hiciste.
+
+Ejemplos:
+- «Hover, en la carpeta que tienes anexada, crea un TXT llamado prueba1».
+- «Hover, crea una subcarpeta llamada prueba uno».
+- «Hover, en la carpeta que tienes anexada, crea un documento Excel
+  que se llame ProEva1» (requiere Excel instalado).
+- «Hover, crea un documento en Google» (abre Google Docs, **no** guarda
+  el documento en la carpeta local).
+- «Hover, pregúntale a ChatGPT cómo está» (envío sin confirmar).
+
+Un archivo o carpeta que ya existe **nunca se sobrescribe**.
+Si Whisper no entiende con claridad el nombre de la carpeta o archivo,
+HOVER pedirá una frase más específica.
+
+Para actualizar:
+\`\`\`powershell
+cd C:\Users\gomez\hover
+git pull origin main
+cd .\HOVER_NEXT
+.\INICIAR_HOVER.bat
+\`\`\`
+
+
+---
 # HOVER — Comandos de voz cotidianos
 
 Los comandos funcionan con `Hover` u `Oye Hover`, y no necesitan
