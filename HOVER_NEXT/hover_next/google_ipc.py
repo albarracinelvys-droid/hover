@@ -60,10 +60,15 @@ def execute_control(action,service):
     try:
         google_auth._client_path()
     except google_auth.GoogleAuthError:
-        message=(
-            "FALTA CLIENTE OAUTH: guarda google_oauth_client.json en "
-            "%LOCALAPPDATA%/HOVER_NEXT. Configúralo en Google Cloud "
-            "como aplicación de escritorio antes de pulsar Conectar.")
+        if google_auth.CLIENT.is_file():
+            message=(
+                "CLIENTE OAUTH INVALIDO: el JSON no es de Aplicación de "
+                "escritorio. Descarga otra vez el cliente Desktop desde Google Cloud.")
+        else:
+            message=(
+                "FALTA CLIENTE OAUTH: guarda google_oauth_client.json en "
+                "%LOCALAPPDATA%/HOVER_NEXT. Configúralo en Google Cloud "
+                "como aplicación de escritorio antes de pulsar Conectar.")
         print("[google]",message,flush=True)
         write_status(message)
         publish("error","Google: falta el archivo OAuth de escritorio",3)
