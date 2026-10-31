@@ -51,9 +51,23 @@ def install_parakeet() -> None:
         print("[modelo] Descargando y verificando",name,"(",round(size/1e6),"MB )",flush=True)
         result = Path(hf_hub_download(repo_id=MODEL_REPO, filename=name,
                     revision=MODEL_REVISION, local_dir=str(MODEL_DIR)))
-        if result.stat().st_size != size or sha256(result) != expected:
+        actual = sha256(result)
+        if result.stat().st_size != size or actual != expected:
+            print(f"[modelo] Integridad no coincide para {name}: obtenido {actual}, esperado {expected}",flush=True)
+            # Retry only the bad file; never re-download the 652 MB encoder.
             result.unlink(missing_ok=True)
-            raise RuntimeError("Integridad SHA-256 incorrecta para "+name)
+            result = Path(hf_hub_download(
+                repo_id=MODEL_REPO, filename=name, revision=MODEL_REVISION,
+                local_dir=str(MODEL_DIR), force_download=True))
+            actual = sha256(result)
+            if result.stat().st_size != size or actual != expected:
+                # Never install unverified model weights.
+                result.unlink(missing_ok=True)
+                raise RuntimeError(
+                    f"SHA-256 incorrecto para {name}, incluso tras reintentar. "
+                    f"Obtenido {actual}; esperado {expected}. "
+                    "Se mantendra el motor Whisper. Comprueba conexion o antivirus."
+                )
         print("[modelo] Correcto:",name,flush=True)
     print("[modelo] Parakeet instalado y verificado. Se ejecuta sin conexión.",flush=True)
 
