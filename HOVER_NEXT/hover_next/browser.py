@@ -52,8 +52,8 @@ class BrowserBridge:
         matched=self._tabs(provider)
         if not matched: raise BrowserUnavailable(f'No hay pestaña de {provider} abierta bajo HOVER')
         matched[-1].close();return True
-    def send_prompt(self,provider,prompt,file=None):
-        page=self.page(provider)
+    def send_prompt(self,provider,prompt,file=None,new=False):
+        page=self.page(provider,new=new)
         if file:
             chooser=page.locator('input[type="file"]').first
             if chooser.count()==0:
