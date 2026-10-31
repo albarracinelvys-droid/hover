@@ -134,6 +134,13 @@ def parse(text: str) -> Intent:
     # Guard state-changing GitHub requests before generic web shortcuts.
     if re.fullmatch(r'(?:que puedes hacer|que sabes hacer|ayuda|comandos|mostrar comandos|lista de comandos)', t):
         return Intent('show_help')
+    # Natural information questions always go to Google before any app/file
+    # routing: "como crear un repo" is research, NOT a repo creation command.
+    # Explicit imperatives such as "crea un repositorio" do not match.
+    from .information_queries import information_request
+    info = information_request(t)
+    if info is not None:
+        return Intent(info[0], args=info[1])
     # The wake parser strips punctuation, including hyphens. For repo names,
     # keep the original spelling and join spoken name words explicitly.
     repo_request = _parse_private_repo_request(normalize(text))
