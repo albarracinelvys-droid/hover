@@ -165,7 +165,8 @@ class VoiceDialogue:
             intent=parse(candidate)
             allow={"local_name_needed","create_local","google_search",
                    "google_app","windows_app","office_new","open_link",
-                   "media_key","spotify_play","spotify_resume","open_site"}
+                   "media_key","spotify_play","spotify_resume","open_site",
+                   "pc_transfer","pc_rename","pc_create","pc_append"}
             if intent.action in allow:
                 print("[dialogo] Orden de seguimiento con 'Oye':",candidate,flush=True)
                 return self._command(candidate)
