@@ -396,9 +396,9 @@ class ExtendedPCVoiceTests(unittest.TestCase):
     def test_create_named_folders_excel_word_text_csv(self):
         examples=(
             ("Hover crea una carpeta llamada Proyectos en el escritorio",
-             "folder","Proyectos","desktop"),
+             "folder","proyectos","desktop"),
             ("Hover crea carpeta Informes en documentos",
-             "folder","Informes","documents"),
+             "folder","informes","documents"),
             ("Hover crea un archivo Excel llamado inventario en documentos",
              "excel","inventario","documents"),
             ("Hover crea un documento de Word llamado Informe en el escritorio",
@@ -407,7 +407,7 @@ class ExtendedPCVoiceTests(unittest.TestCase):
              "text","notas","downloads"),
             ("Hover crea un archivo csv llamado ventas en el escritorio",
              "csv","ventas","desktop"),
-            ("Hover crea carpeta Pruebas","folder","Pruebas","desktop"),
+            ("Hover crea carpeta Pruebas","folder","pruebas","desktop"),
         )
         for spoken,kind,name,loc in examples:
             with self.subTest(spoken=spoken):
