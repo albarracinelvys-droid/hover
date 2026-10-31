@@ -20,6 +20,7 @@ class RealLogRegressionTests(unittest.TestCase):
             ("Abre una nueva pestaña de Google.", "google_app", ""),
             ("Hover abre calculadora", "windows_app", ""),
             ("Hover abre Word", "office_new", ""),
+            ("Oye Hover. Cierra Google.", "close_google_tab", ""),
         ]
         for transcript, expected_action, expected_provider in cases:
             with self.subTest(transcript=transcript):
@@ -85,6 +86,15 @@ class RealLogRegressionTests(unittest.TestCase):
                 response=executor.execute(parse("Hover abre calculadora"))
             self.assertEqual(response,"Calculadora abierta.")
             popen.assert_called_once_with(["calc.exe"],shell=False)
+
+    def test_closing_google_refuses_other_windows(self):
+        from hover_next.desktop import ActionUnavailable
+        with tempfile.TemporaryDirectory() as d:
+            executor=Executor(Path(d)/"config.json",browser=MagicMock())
+            with patch("hover_next.desktop.sys.platform","win32"), \
+                 patch("hover_next.desktop._foreground_is_google_browser",return_value=False):
+                with self.assertRaises(ActionUnavailable):
+                    executor.execute(parse("Oye Hover. Cierra Google."))
 
     def test_no_executed_command_for_ambient_phrase(self):
         for text in ("Oye.", "Hasta la próxima", "Subtítulos realizados por la comunidad de Amara.org"):
