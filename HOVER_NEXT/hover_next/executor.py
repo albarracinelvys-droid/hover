@@ -38,8 +38,15 @@ def safe_destination(source: Path, folder: Path):
     return destination
 
 def confirm_intent(intent: Intent) -> bool:
-    if not intent.requires_confirmation:return True
-    print(f'CONFIRMACION: {intent.action} {intent.provider} {intent.args}')
+    if not intent.requires_confirmation:
+        return True
+    print(f'CONFIRMACION: {intent.action} {intent.provider} {intent.args}', flush=True)
+    # Repos are permanent GitHub objects. Confirm the exact transcribed name,
+    # never only "SI": Whisper sometimes changes a proper name.
+    if intent.action == 'create_private_repo':
+        name = intent.args.get('name','')
+        typed = input(f'Para crear el repositorio PRIVADO escribe exactamente {name}: ').strip()
+        return typed == name
     return input('¿Ejecutar esta accion? escribe SI: ').strip().upper()=='SI'
 
 class Executor:
@@ -56,6 +63,12 @@ class Executor:
             return 'Accion pendiente de confirmacion. No se ejecuto.'
         action=intent.action
         provider=intent.provider
+        if action == 'repo_name_needed':
+            return ('Entendí que quieres crear un repositorio privado, pero no su nombre. '
+                    'Di: Hover, crea un repositorio privado en GitHub llamado Ejemplo.')
+        if action == "open_link":
+            from .desktop import open_site_shortcut
+            return open_site_shortcut(intent.args["site"])
         if action == "close_google_tab":
             from .desktop import close_google_tab
             return close_google_tab()
@@ -149,7 +162,8 @@ class Executor:
             name=intent.args['name']
             if not re.fullmatch(r'[a-zA-Z0-9._-]{1,100}',name):return 'Nombre invalido.'
             exe=shutil.which('gh')
-            if not exe:return 'GitHub CLI no esta instalado. Instala gh y ejecuta gh auth login.'
+            if not exe:return ('GitHub CLI no está instalado. En PowerShell: '
+                               'winget install --id GitHub.cli -e; después gh auth login.')
             r=subprocess.run([exe,'repo','create',name,'--private','--description','Repositorio creado con HOVER'],capture_output=True,text=True,timeout=45)
             if r.returncode:raise RuntimeError((r.stderr or r.stdout).strip())
             return (r.stdout or f'Repositorio privado {name} creado').strip()
