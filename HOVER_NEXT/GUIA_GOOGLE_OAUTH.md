@@ -1,5 +1,48 @@
 # HOVER v4.6 — Google OAuth 2.0 local (Windows)
 
+## Recuperación: OAuth JSON ausente y error WinError 5/32 en Windhawk
+
+Si la consola dice **FALTA el archivo OAuth local**, los paquetes ya están
+instalados; **no pegues "connect all" en el JSON** y no inventes
+credenciales. Desde
+[Google Cloud → Google Auth Platform → Clients](https://console.cloud.google.com/auth/clients)
+crea un cliente **Aplicación de escritorio**, descarga su JSON,
+renómbralo \`google_oauth_client.json\` y guárdalo **fuera de GitHub** en
+\`%LOCALAPPDATA%\HOVER_NEXT\google_oauth_client.json\`. Comprueba la ruta:
+
+\`\`\`powershell
+Test-Path "$env:LOCALAPPDATA\HOVER_NEXT\google_oauth_client.json"
+\`\`\`
+
+Debe imprimir \`True\`. Si imprime \`False\`, HOVER no puede iniciar OAuth;
+\`connect all\` no sustituye ese archivo.
+
+Si además aparece \`Permission denied\`, \`WinError 5\` o \`WinError 32\`
+al actualizar \`voice_ui.txt\`, actualiza HOVER. El puente visual usa
+archivos temporales de nombre único, reintentos limitados y avisos
+reducidos, y el motor de voz limita a una sola instancia activa.
+Cierra antes el HOVER anterior con Ctrl+C. Para **verificar** instancias
+anteriores sin cerrar otros programas Python:
+
+\`\`\`powershell
+Get-CimInstance Win32_Process |
+  Where-Object { $_.Name -in @("python.exe", "pythonw.exe") -and
+                 $_.CommandLine -like "*hover_next.app*" } |
+  Select-Object ProcessId, CommandLine
+\`\`\`
+
+Si aparece una instancia de HOVER antigua que no responde, ciérrala
+desde su consola. No borres tus tokens y no elimines toda la carpeta Temp.
+
+Después de guardar un JSON válido, ejecuta
+\`INSTALAR_GOOGLE_HOVER.bat\` para comprobarlo, inicia HOVER con
+\`INICIAR_HOVER.bat\` y desde **Atajos → GOOGLE** conecta primero Drive.
+Autoriza en el navegador; luego conecta los demás servicios según
+los necesites. La interfaz no guarda ni muestra contraseñas o tokens.
+
+---
+
+
 ## Qué está implementado
 
 - Interfaz Windhawk nueva: **Atajos → GOOGLE / Conectar cuenta**, sin quitar
