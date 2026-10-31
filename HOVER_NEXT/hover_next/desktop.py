@@ -61,26 +61,37 @@ def open_windows_app(app: str) -> str:
             "paint":"Paint abierto.", "explorer":"Explorador abierto."}[app]
 
 
-def new_word_document() -> str:
+def new_office_document(kind: str) -> str:
     if sys.platform != "win32":
-        raise ActionUnavailable("Word local requiere Windows.")
+        raise ActionUnavailable("Microsoft Office local requiere Windows.")
+    apps = {
+        "word": ("Word.Application", "Documents", "Word"),
+        "excel": ("Excel.Application", "Workbooks", "Excel"),
+        "powerpoint": ("PowerPoint.Application", "Presentations", "PowerPoint"),
+    }
+    if kind not in apps:
+        raise ActionUnavailable("Aplicación de Office no admitida.")
     try:
         import win32com.client
     except ImportError as exc:
         raise ActionUnavailable(
-            "Para crear un documento nuevo en Word instalado, ejecuta: "
+            "Instala el soporte opcional de Microsoft Office con: "
             r".\.venv\Scripts\python.exe -m pip install pywin32"
         ) from exc
+    progid, collection, title = apps[kind]
     try:
-        word = win32com.client.Dispatch("Word.Application")
-        word.Visible = True
-        word.Documents.Add()
+        app = win32com.client.Dispatch(progid)
+        app.Visible = True
+        getattr(app, collection).Add()
     except Exception as exc:
         raise ActionUnavailable(
-            "No pude crear el documento: comprueba que Microsoft Word esté instalado y activado."
+            f"No pude crear el documento en {title}. Comprueba que esté instalado y activado."
         ) from exc
-    return "Documento nuevo de Word abierto; todavía no está guardado."
+    return f"Nuevo documento de {title} abierto; todavía no está guardado."
 
+
+def new_word_document() -> str:
+    return new_office_document("word")
 
 def _selected_explorer_path() -> Path | None:
     """Only use the selected item of the foreground Windows Explorer window."""
