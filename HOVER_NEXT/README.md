@@ -96,3 +96,19 @@ Comprueba con `gh repo view --json name,visibility` que el repositorio sea PRIVA
 - Nunca se ejecutan comandos PowerShell arbitrarios dictados por voz.
 - Las acciones web pueden fallar si cambia el HTML o hay un CAPTCHA.
 - No se automatiza la extracción de respuestas ni la descarga de entregables terminados.
+
+
+## Diagnóstico de «Oye Hover»
+
+Whisper puede transcribir «Oye, ¿jover?» o «¡Huji Hover!». El módulo
+`hover_next/wake.py` admite esas variantes al principio de la frase.
+Verás `[listening]` y escucharás un pitido corto en Windows.
+
+**Importante:** mantén `INICIAR_VOZ.bat` abierto; `INICIAR_TEXTO.bat`
+no utiliza el micrófono. La captura se realiza en bloques de cinco segundos,
+por lo que no es instantánea. `Ctrl+C` detiene el programa normalmente.
+El detector no autentica quién habla y no debería tener permisos para
+ejecutar operaciones peligrosas sin confirmación.
+
+Si ves «Reconocido» pero no «[listening]», copia la transcripción exacta
+para crear otra prueba de regresión.
