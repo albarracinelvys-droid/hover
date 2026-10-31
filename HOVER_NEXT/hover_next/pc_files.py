@@ -368,6 +368,10 @@ def close_foreground_window(app: str) -> str:
         hwnd=current
     else:
         handles=_all_windows(win32gui)
+        # Preserve the foreground handle even if a mock/WM enumerate callback
+        # did not include it; still require strict app identity checks.
+        if current and current not in handles:
+            handles.insert(0,current)
         if app in ("downloads","documents"):
             hwnd=_specific_explorer_folder(win32gui,app,handles)
         else:
