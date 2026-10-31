@@ -70,7 +70,7 @@ class DialogueTests(unittest.TestCase):
         with patch("hover_next.voice_coucou.publish"):
             self.assertEqual(self.d.process("Hover"),"wake")
             self.assertEqual(self.d.process("Abre calculadora"),"action")
-        self.assertEqual(self.executed,["abre calculadora"])
+        self.assertEqual(self.executed,["Abre calculadora"])
 
     def test_oye_hover_action(self):
         with patch("hover_next.voice_coucou.publish"):
