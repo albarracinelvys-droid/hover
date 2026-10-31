@@ -84,8 +84,8 @@ class Executor:
         if action=='close_tab':
             self.browser.close_tab(provider)
             return f'Cerrada la ultima pestana de {provider} controlada por HOVER.'
-        if action=='send_prompt':
-            return self.browser.send_prompt(provider,intent.args['prompt'])
+        if action in ('send_prompt','new_chat_and_send'):
+            return self.browser.send_prompt(provider,intent.args['prompt'],new=(action=='new_chat_and_send'))
         if action=='upload_file':
             if provider not in ('chatgpt','claude'):return 'Indica ChatGPT o Claude.'
             name=intent.args.get('filename','')
