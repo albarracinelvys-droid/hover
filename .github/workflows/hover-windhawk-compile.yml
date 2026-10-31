@@ -1,0 +1,17 @@
+name: Windhawk C++ Windows syntax
+on:
+  push:
+    paths:
+      - 'HOVER_v4_5_PROYECTOS_DESDE_ATAJOS_WINDHAWK.wh.cpp'
+      - 'HOVER_NEXT/tests/windhawk_compile_stub.cpp'
+      - '.github/workflows/hover-windhawk-compile.yml'
+  workflow_dispatch:
+jobs:
+  compile:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Compile Windhawk C++ as Windows translation unit
+        shell: pwsh
+        run: cl.exe /nologo /std:c++20 /EHsc /W3 /c .\\HOVER_NEXT\\tests\\windhawk_compile_stub.cpp /Fo:$env:TEMP\\hover-projects.obj
