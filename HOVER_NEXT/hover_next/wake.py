@@ -11,6 +11,7 @@ import unicodedata
 _WAKE = re.compile(
     r"^(?:(?:oye|oie|oi|hey|hola|huji|uji|huyi)\s+)?"
     r"(?:hover|jover|over|llover|hober|huver|hoguer)\b"
+    r"|^(?:oye\s+joven|huji\s+hauir)\b"
 )
 
 
