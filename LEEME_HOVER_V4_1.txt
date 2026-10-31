@@ -1,0 +1,35 @@
+HOVER v4.1 - Voz + controles (Windhawk)
+=====================================
+
+QUE CAMBIO:
+- Mejor reconocimiento de ChatGPT en español: «chat e pepe», «cati piti», «chat jep», «chat e pretende», «calle petty» y otras variantes, normalizadas con reglas locales.
+- Mejor detección de «Oye Hover», incluyendo «Oye Over», «Oye Jover», «Oye Joe».
+- Motor Whisper disponible para reemplazar Vosk pequeño cuando no reconozca bien.
+- Voz de respuesta ejecutada sin bloquear el micrófono; se silencia la entrada mientras habla SAPI para evitar que se escuche a sí mismo.
+- Interfaz: se reducen las lecturas repetitivas de pestañas durante cada animación.
+- Botones multimedia con resaltado temporal y quinto icono de música accionable (abre Spotify).
+- Tarjetas principales y botones sin contornos internos.
+- Se conservan los ojos, pestañas de voz, navegación, monitor y carpeta drag-and-drop.
+
+INSTALACION WINDHAWK:
+1. Desactiva mods duplicados de HOVER para evitar islas superpuestas.
+2. Abre tu mod HOVER v4.0 ya instalado. Reemplaza su código por HOVER_v4_1_VOZ_CONTROLES_WINDHAWK.wh.cpp
+3. Pulsa Ctrl+B para compilar y luego habilítalo.
+   Conservamos el mismo ID de mod para actualizarlo en el lugar.
+
+ACTIVAR MOTOR WHISPER MEJORADO:
+4. Ejecuta INSTALAR_WHISPER_HOVER.bat una sola vez.
+5. Ejecuta INICIAR_VOZ_HOVER_WHISPER.bat (modelo base, CPU).
+   Puedes elegir INICIAR_VOZ_HOVER_WHISPER_SMALL.bat si la CPU dispone de recursos y prefieres precisión.
+   Se descarga el modelo de Whisper al primer uso. El audio se procesa localmente y no se guarda.
+6. Alternativamente, si ya tienes Vosk y su modelo: INICIAR_VOZ_HOVER_VOSK.bat
+   No ejecutes los dos motores a la vez.
+7. Prueba con: «Oye Hover, abre ChatGPT», «Oye Hover, muéstrame mi PC», «Oye Hover, muestra equipo».
+
+NOTAS Y LIMITACIONES:
+- Whisper «base» suele mejorar marcas difíciles, pero es más lento en CPU; el modelo «small» ocupa más espacio y tarda más.
+- El reconocimiento no se puede garantizar al 100% sin probar tu micrófono, ruido ambiente, y el modelo descargado.
+- Los comandos personalizados siguen restringidos a sitios autorizados, pestañas y acciones locales; eventos de calendario .ics requieren confirmación.
+- No es una app Windows independiente: Windhawk renderiza la isla; Python procesa voz.
+- Sin Windhawk en Windows no se ha podido compilar nativamente ni comprobar gestos/animaciones.
+- Spotify y carátulas dependen del puente multimedia opcional Puente_HOVER_v3_9_2.py; no lo ejecutes por duplicado.

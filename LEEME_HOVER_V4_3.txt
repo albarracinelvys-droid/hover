@@ -1,0 +1,41 @@
+HOVER VOZ v4.3 - CORRECCIONES AL EJECUTOR DE COMANDOS
+=======================================================
+
+IMPORTANTE: No vuelvas a ejecutar Asistente_Voz_HOVER_v4_0.py ni v4_2.py.
+Usa Asistente_Voz_HOVER_v4_3.py del paquete nuevo.
+
+Whisper SMALL ya reconoce las palabras. Esta versión corrige las ACCIONES:
+1) "Oye Hover, abre ChatGPT" -> solicita abrir ChatGPT y comprueba si el navegador acepta la orden.
+2) "Oye Hover, cierra la última pestaña de ChatGPT" -> por seguridad CIERRA SOLO la pestaña ACTIVA de ChatGPT en un navegador compatible (Chrome, Edge, Firefox, Brave, Opera o Vivaldi). NO puede buscar y cerrar una pestaña de fondo sin una extensión.
+3) "Oye Hover, reproces Spotify" -> interpreta "reproduce Spotify". Abre Spotify e intenta reproducir cuando el puente multimedia confirma que existe una sesión activa de Spotify.
+4) Abre Claude, toma captura, muestra Mi PC, crea pestaña, crea evento ICS, mueve último archivo de Descargas con confirmación.
+
+INSTALACIÓN:
+1. Cierra cualquier otra versión del asistente con Ctrl+C.
+2. Extrae el ZIP a una carpeta, o copia Asistente_Voz_HOVER_v4_3.py y los .bat a la carpeta v4.2 existente (con .venv).
+3. Si no existe .venv, ejecuta INSTALAR_VOZ_HOVER_v4_3.bat.
+4. Ejecuta HOVER_INICIAR_VOZ_v4_3.bat (Oye Hover) o HOVER_VOZ_F8_v4_3.bat (activa con F8).
+5. Para comprobar sin micrófono: HOVER_PROBAR_TEXTO_v4_3.bat.
+
+CÓMO CERRAR UNA PESTAÑA:
+- Primero activa en Chrome/Edge/Firefox la pestaña de ChatGPT que quieres cerrar.
+- Di «Oye Hover, cierra la última pestaña de ChatGPT».
+- Si el foco está en VS Code u otra aplicación HOVER NO cierra nada, para evitar perder trabajo.
+
+SPOTIFY:
+- Abre Spotify y reproduce alguna canción una vez; debe estar activo el puente multimedia para detectar la sesión de Spotify.
+- Si Spotify no publica una sesión, HOVER solicitará abrirlo, pero no fingirá que ya reproduce.
+- Inicia el puente si usas Puente_HOVER_v3_9_2.py.
+
+NOTAS:
+- Los tests comprueban el intérprete con acciones SIMULADAS, no comprueban tu navegador ni tu micrófono real.
+- Windhawk: no hace falta reinstalar ni recompilar el mod para actualizar solo el asistente de voz. Se incluye el último código de Windhawk sin cambios, por si lo necesitas.
+- No ejecuta comandos arbitrarios de terminal ni mueve archivos sin confirmación.
+- No cierra aplicaciones que no sean un navegador con ChatGPT activo.
+
+NUEVO CONTROL DIRIGIDO DE SPOTIFY (RECOMENDADO):
+- Ejecuta HOVER_INSTALAR_CONTROL_SPOTIFY_v4_3.bat una sola vez.
+- Esto instala en el entorno .venv la biblioteca de Windows Media Control.
+- Tras "reproduce Spotify", el asistente intenta la orden TryPlayAsync de la sesión de Spotify, no una tecla global que pudiera pausar Chrome.
+- Si Spotify no expone ninguna sesión, necesitas iniciar una canción una vez desde Spotify.
+- Puede haber reproductores que rechacen la orden; HOVER lo notificará.
