@@ -88,20 +88,29 @@ def execute_control(action,service):
             google_auth.connect(key)
             try:
                 new_email=google_auth.account_email(key).casefold()
-            except Exception:
+            except Exception as exc:
                 # A token without verified account identity cannot be used
                 # in an integration that promises one consistent account.
                 google_auth.disconnect(key)
                 raise google_auth.GoogleAuthError(
-                    "Google no pudo verificar la identidad de esta cuenta.")
+                    "Google guardó el token pero no pudo verificar la cuenta "
+                    f"({type(exc).__name__}). Revisa la API de identidad."
+                ) from exc
             if not new_email or (existing_email and new_email!=existing_email):
                 google_auth.disconnect(key)
                 raise google_auth.GoogleAuthError(
                     "La cuenta Google no coincide. Elige la misma cuenta en todos los servicios.")
             outcomes.append(key+" conectado como "+new_email)
         except Exception as exc:
-            outcomes.append(f"{key}: {type(exc).__name__}. Comprueba el consentimiento, los permisos y las APIs.")
+            # Only our curated GoogleAuthError messages reach the UI.
+            # Never expose OAuth URLs, authorization codes or tokens.
+            reason=(str(exc) if isinstance(exc,google_auth.GoogleAuthError)
+                    else type(exc).__name__)
+            outcomes.append(f"{key}: {reason}")
+            print("[google] Falló",key,reason,flush=True)
         write_status(outcomes[-1])
     final="; ".join(outcomes)
-    publish("ok",final[:110],3)
+    publish("error" if any(" conectado como " not in result
+                           for result in outcomes) else "ok",
+            final[:110],3)
     return final
