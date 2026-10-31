@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import re
 import unicodedata
+from .wake import extract_wake
 
 
 @dataclass(frozen=True)
@@ -29,8 +30,8 @@ def identify_provider(t: str) -> str:
 
 
 def parse(text: str) -> Intent:
-    t = normalize(text)
-    t = re.sub(r'^(?:oye|hey|hola)\s+(?:hover|jover|over|llover)\s*[,.:;]?\s*', '', t)
+    spoken_command = extract_wake(text)
+    t = spoken_command if spoken_command is not None else normalize(text)
     provider = identify_provider(t)
     if re.search(r'\b(crea|crear)\s+(?:un\s+)?(?:nuevo\s+)?repo(?:sitorio)?\s+(?:en\s+github\s+)?(?:privado\s+)?(?:llamado|que\s+se\s+llame)\s+([\w.-]+)', t):
         name = re.search(r'(?:llamado|que\s+se\s+llame)\s+([\w.-]+)', t).group(1)
