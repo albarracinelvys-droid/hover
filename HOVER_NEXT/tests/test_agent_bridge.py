@@ -16,8 +16,9 @@ class BridgeTests(unittest.TestCase):
             with patch("hover_next.ui_bridge.bridge_file", return_value=target):
                 self.assertTrue(publish("thinking", "Oye\tHover\nprueba", 3))
             fields = target.read_text(encoding="utf-8").split("\t", 3)
-            self.assertEqual(fields[1], "thinking")
-            self.assertEqual(fields[2], "3")
+            # Voice state is now deliberately compact, without a tab request.
+            self.assertEqual(fields[1], "quiet-thinking")
+            self.assertEqual(fields[2], "-1")
             self.assertEqual(fields[3], "Oye Hover prueba")
     def test_page_routing(self):
         self.assertEqual(status_page("spotify_play"), 0)
