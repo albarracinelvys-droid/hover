@@ -191,6 +191,103 @@ def prepare_delete(args: dict, config: dict) -> dict:
             "mtime_ns":str(stat.st_mtime_ns)}
 
 
+def _new_file_target(folder: Path, name: str, extension: str) -> Path:
+    """Require the correct document suffix and exclusive file creation."""
+    name=safe_basename(name)
+    suffix=Path(name).suffix.casefold()
+    if suffix and suffix!=extension:
+        raise PCFileError(
+            f"El nombre termina en {suffix}, pero este tipo necesita {extension}. "
+            "No crearé otro formato por error.")
+    if not suffix:
+        name+=extension
+    target=folder / name
+    if target.exists() or target.is_symlink():
+        raise PCFileError(f"Ya existe {target.name}; no sobrescribí el archivo.")
+    return target
+
+
+def create_saved_file(folder: Path, kind: str, name: str) -> str:
+    """Write a valid, empty user document to disk using exclusive creation."""
+    extensions={"text":".txt","excel":".xlsx","word":".docx","csv":".csv"}
+    if kind not in extensions:
+        raise PCFileError("Tipo de documento no compatible.")
+    target=_new_file_target(folder,name,extensions[kind])
+    if kind in ("text","csv"):
+        with target.open("x",encoding="utf-8-sig" if kind=="csv" else "utf-8"):
+            pass
+    elif kind=="excel":
+        try:
+            from openpyxl import Workbook
+        except ImportError as exc:
+            raise PCFileError("Falta openpyxl. Instala requirements.txt.") from exc
+        wb=Workbook()
+        wb.active.title="Hoja1"
+        try:
+            with target.open("xb") as handle:
+                try:
+                    wb.save(handle)
+                except Exception:
+                    target.unlink(missing_ok=True)
+                    raise
+        finally:
+            wb.close()
+    elif kind=="word":
+        try:
+            from docx import Document
+        except ImportError as exc:
+            raise PCFileError("Falta python-docx. Instala requirements.txt.") from exc
+        with target.open("xb") as handle:
+            try:
+                Document().save(handle)
+            except Exception:
+                target.unlink(missing_ok=True)
+                raise
+    if not target.is_file() or target.stat().st_size==0 and kind in ("excel","word"):
+        raise PCFileError("El archivo no se pudo guardar correctamente.")
+    return f"Creé y guardé el archivo {target}."
+
+
+def close_foreground_window(app: str) -> str:
+    """Ask ONE active user window to close normally (WM_CLOSE), never kill it."""
+    try:
+        import win32gui
+        import win32con
+    except ImportError as exc:
+        raise PCFileError("Para controlar ventanas en Windows se necesita pywin32.") from exc
+    hwnd=win32gui.GetForegroundWindow()
+    if not hwnd or not win32gui.IsWindowVisible(hwnd):
+        raise PCFileError("No hay una ventana activa que pueda cerrar.")
+    title=win32gui.GetWindowText(hwnd).strip()
+    clazz=win32gui.GetClassName(hwnd)
+    # Never close the shell, invisible windows, elevated system dialogs or
+    # HOVER itself by an uncertain Whisper transcription.
+    blocked={"Progman","WorkerW","Shell_TrayWnd","DV2ControlHost"}
+    if (not title or clazz in blocked or "HOVER" in title.upper()
+            or title.casefold() in ("program manager","administrador de tareas")):
+        raise PCFileError("Esa ventana está protegida. No la cerré.")
+    expected={
+        "excel":("XLMAIN","excel"),
+        "word":("OpusApp","word"),
+        "powerpoint":("PPTFrameClass","powerpoint"),
+        "calculator":("ApplicationFrameWindow","calculadora"),
+        "notepad":("Notepad","bloc de notas"),
+        "paint":("MSPaintApp","paint"),
+        "explorer":("CabinetWClass","explorador de archivos"),
+    }
+    if app!="foreground":
+        if app not in expected:
+            raise PCFileError("Solo cierro aplicaciones conocidas al frente.")
+        window_class, label=expected[app]
+        if clazz!=window_class and label not in title.casefold():
+            raise PCFileError(
+                f"La ventana activa no corresponde a {app}. No cerré otra aplicación.")
+    # Windows WM_CLOSE is graceful: unsaved changes remain protected by the
+    # application's own confirmation; no TerminateProcess or taskkill is used.
+    win32gui.PostMessage(hwnd,win32con.WM_CLOSE,0,0)
+    return f"Solicité cerrar la ventana activa: {title}. La aplicación puede pedir guardar cambios."
+
+
 def perform(action: str, args: dict, config: dict) -> str:
     if action == "pc_delete":
         # Only a fresh, frozen file snapshot is eligible for deletion.
@@ -266,12 +363,10 @@ def perform(action: str, args: dict, config: dict) -> str:
             target=folder / name
             target.mkdir(exist_ok=False)
             return f"Creé la carpeta {target}."
-        if args["kind"]=="text":
-            target=folder / (name if name.lower().endswith(".txt") else name+".txt")
-            with target.open("x",encoding="utf-8"):
-                pass
-            return f"Creé el archivo de texto {target}."
-        raise PCFileError("Solo se permite crear carpetas o archivos TXT.")
+        return create_saved_file(folder,args["kind"],name)
+
+    if action == "pc_close_window":
+        return close_foreground_window(args["app"])
 
     if action == "pc_append":
         folder=location(args["location"],config)

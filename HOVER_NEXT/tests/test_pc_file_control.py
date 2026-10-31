@@ -392,5 +392,172 @@ class FileOperations(unittest.TestCase):
         self.assertFalse((self.dirs["desktop"]/"secret.txt").exists())
 
 
+class ExtendedPCVoiceTests(unittest.TestCase):
+    def test_create_named_folders_excel_word_text_csv(self):
+        examples=(
+            ("Hover crea una carpeta llamada Proyectos en el escritorio",
+             "folder","proyectos","desktop"),
+            ("Hover crea carpeta Informes en documentos",
+             "folder","informes","documents"),
+            ("Hover crea un archivo Excel llamado inventario en documentos",
+             "excel","inventario","documents"),
+            ("Hover crea un documento de Word llamado Informe en el escritorio",
+             "word","informe","desktop"),
+            ("Oye Hover crea un TXT llamado notas en descargas",
+             "text","notas","downloads"),
+            ("Hover crea un archivo csv llamado ventas en el escritorio",
+             "csv","ventas","desktop"),
+            ("Hover crea carpeta Pruebas","folder","pruebas","desktop"),
+        )
+        for spoken,kind,name,loc in examples:
+            with self.subTest(spoken=spoken):
+                intent=parse(spoken)
+                self.assertEqual(intent.action,"pc_create")
+                self.assertEqual(intent.args,{"kind":kind,"name":name,"location":loc})
+                self.assertFalse(intent.requires_confirmation)
+
+    def test_no_name_asks_for_next_utterance(self):
+        for spoken,kind,loc in (
+            ("Hover crea una carpeta","folder","desktop"),
+            ("Hover crea un Excel en documentos","excel","documents"),
+            ("Hover crea un archivo Word","word","desktop"),
+            ("Hover crea un CSV en descargas","csv","downloads"),
+        ):
+            with self.subTest(spoken=spoken):
+                intent=parse(spoken)
+                self.assertEqual(intent.action,"pc_name_needed")
+                self.assertEqual(intent.args,{"kind":kind,"location":loc})
+
+    def test_close_only_foreground_window(self):
+        for speech,app in (
+            ("Hover cierra la ventana actual","foreground"),
+            ("Oye Hover cierra Excel","excel"),
+            ("Hover cierra Word","word"),
+            ("Hover cierra la calculadora","calculator"),
+            ("Hover cerrar el bloc de notas","notepad"),
+        ):
+            with self.subTest(speech=speech):
+                got=parse(speech)
+                self.assertEqual(got.action,"pc_close_window")
+                self.assertEqual(got.args["app"],app)
+                self.assertFalse(got.requires_confirmation)
+
+    def test_questions_do_not_mutate_windows(self):
+        for speech in ("Hover como se crea una hoja de excel",
+                       "Hover que es una carpeta",
+                       "Hover puedes explicarme como cerrar Word",
+                       "Hover elimina todos los archivos de Windows"):
+            intent=parse(speech)
+            self.assertNotIn(intent.action,("pc_create","pc_delete","pc_close_window"))
+
+    def test_voice_two_turn_creates_excel_with_exact_name(self):
+        commands=[]
+        dialogue=VoiceDialogue(
+            lambda cmd:commands.append(cmd) or "ok",lambda *args:None,
+            clock=lambda:100)
+        with patch("hover_next.voice_coucou.publish"):
+            self.assertEqual(dialogue.process("Hover crea un excel en documentos"),"action")
+            self.assertEqual(dialogue.pending_kind,"excel")
+            self.assertEqual(dialogue.process("Control industrial"),"action")
+        self.assertEqual(parse(commands[-1]).action,"pc_create")
+        self.assertEqual(parse(commands[-1]).args,{
+            "kind":"excel","name":"control industrial","location":"documents"})
+
+
+class SavedOfficeFileTests(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name)
+        fake=patch("hover_next.pc_files.location",
+                   side_effect=lambda loc,conf:self.root)
+        fake.start()
+        self.addCleanup(fake.stop)
+
+    def test_excel_is_valid_openpyxl_workbook(self):
+        from openpyxl import load_workbook
+        result=pc_files.perform("pc_create",{
+            "kind":"excel","name":"inventario","location":"desktop"},{})
+        target=self.root/"inventario.xlsx"
+        self.assertIn("inventario.xlsx",result)
+        book=load_workbook(target,read_only=True)
+        self.assertEqual(book.sheetnames,["Hoja1"])
+        book.close()
+
+    def test_word_is_valid_docx(self):
+        from docx import Document
+        pc_files.perform("pc_create",{
+            "kind":"word","name":"informe","location":"documents"},{})
+        target=self.root/"informe.docx"
+        self.assertTrue(target.exists())
+        self.assertEqual(len(Document(target).paragraphs),0)
+
+    def test_csv_txt_and_folder_are_created(self):
+        for kind,name,suffix in (
+            ("csv","datos",".csv"),("text","notas",".txt")):
+            pc_files.perform("pc_create",{
+                "kind":kind,"name":name,"location":"downloads"},{})
+            self.assertTrue((self.root/(name+suffix)).is_file())
+        pc_files.perform("pc_create",{
+            "kind":"folder","name":"Trabajo","location":"desktop"},{})
+        self.assertTrue((self.root/"Trabajo").is_dir())
+
+    def test_existing_excel_is_not_overwritten(self):
+        target=self.root/"inventario.xlsx"
+        target.write_bytes(b"DO NOT DELETE")
+        with self.assertRaises(pc_files.PCFileError):
+            pc_files.perform("pc_create",{
+                "kind":"excel","name":"inventario","location":"desktop"},{})
+        self.assertEqual(target.read_bytes(),b"DO NOT DELETE")
+
+    def test_refuses_filename_disguised_as_executable(self):
+        for name in ("malware.exe","../../../outside","reporte.docx"):
+            with self.subTest(name=name):
+                with self.assertRaises((ValueError,pc_files.PCFileError)):
+                    pc_files.perform("pc_create",{
+                        "kind":"excel","name":name,"location":"desktop"},{})
+        self.assertFalse((self.root/"malware.exe").exists())
+
+
+class SafeWindowCloseTests(unittest.TestCase):
+    def test_close_sends_wm_close_not_taskkill(self):
+        import sys
+        win32gui=MagicMock()
+        win32con=MagicMock(WM_CLOSE=16)
+        win32gui.GetForegroundWindow.return_value=123
+        win32gui.GetWindowText.return_value="Libro1 - Excel"
+        win32gui.GetClassName.return_value="XLMAIN"
+        win32gui.IsWindowVisible.return_value=True
+        with patch.dict(sys.modules,{"win32gui":win32gui,"win32con":win32con}):
+            result=pc_files.close_foreground_window("excel")
+        self.assertIn("Libro1",result)
+        win32gui.PostMessage.assert_called_once_with(123,16,0,0)
+
+    def test_does_not_close_another_application(self):
+        import sys
+        win32gui=MagicMock()
+        win32gui.GetForegroundWindow.return_value=123
+        win32gui.GetWindowText.return_value="Libro1 - Excel"
+        win32gui.GetClassName.return_value="XLMAIN"
+        win32gui.IsWindowVisible.return_value=True
+        with patch.dict(sys.modules,{"win32gui":win32gui,"win32con":MagicMock()}):
+            with self.assertRaises(pc_files.PCFileError):
+                pc_files.close_foreground_window("word")
+        win32gui.PostMessage.assert_not_called()
+
+    def test_does_not_close_hover(self):
+        import sys
+        gui=MagicMock()
+        gui.GetForegroundWindow.return_value=123
+        gui.GetWindowText.return_value="HOVER - Cuenta Google"
+        gui.GetClassName.return_value="Window"
+        gui.IsWindowVisible.return_value=True
+        with patch.dict(sys.modules,{"win32gui":gui,"win32con":MagicMock()}):
+            with self.assertRaises(pc_files.PCFileError):
+                pc_files.close_foreground_window("foreground")
+        gui.PostMessage.assert_not_called()
+
+
+
 if __name__=="__main__":
     unittest.main()

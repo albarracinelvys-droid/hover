@@ -136,7 +136,7 @@ class Executor:
                     'crear carpetas y TXT, copiar o mover archivos, '
                     'renombrar, agregar texto, volumen, musica, '
                     'repositorios privados y más. Cambios requieren confirmacion.')
-        if action in ('pc_transfer','pc_rename','pc_create','pc_append','pc_delete'):
+        if action in ('pc_transfer','pc_rename','pc_create','pc_append','pc_delete','pc_close_window'):
             from .pc_files import perform
             return perform(action,intent.args,self.config)
         if action == 'media_key':
@@ -213,6 +213,9 @@ class Executor:
                                     intent.args.get('target','en'))
         if action == 'search_query_needed':
             return 'Repite la busqueda con un termino claro. Ejemplo: Hover busca iPhone en Google.'
+        if action == 'pc_name_needed':
+            return ('Dime SOLO el nombre del archivo o carpeta; lo crearé en '
+                    + intent.args.get("location","escritorio") + '.')
         if action == 'local_name_needed':
             return ('Dime el nombre del archivo o carpeta. Ejemplo: '
                     'Hover, en mi carpeta favorita crea un TXT llamado prueba1.')
