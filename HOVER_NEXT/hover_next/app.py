@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import argparse
 from .intent import parse
-from .executor import Executor, confirm_intent
+from .executor import Executor, confirm_intent, confirm_voice_intent
 from .ui_bridge import publish, status_page
 
 
-def run_one(command, executor):
+def run_one(command, executor, *, voice_mode=False):
     intent = parse(command)
     print("Interpretado:", intent, flush=True)
     if intent.action == "unknown":
@@ -16,7 +16,7 @@ def run_one(command, executor):
         return None
     if intent.requires_confirmation:
         publish("thinking", "Confirmar antes de ejecutar: " + intent.action, status_page(intent.action))
-        if not confirm_intent(intent):
+        if not (confirm_voice_intent(intent) if voice_mode else confirm_intent(intent)):
             publish("ok", "Operacion cancelada")
             print("Cancelado; no se realizo ninguna accion.", flush=True)
             return None
@@ -78,7 +78,10 @@ def main():
                     run_one(command,executor)
     finally:
         publish("idle", "")
-        executor.browser.close()
+        # Playwright synchronous contexts belong to their creating thread.
+        # In voice mode, the ASR worker owns and closes the browser there.
+        if not args.voice:
+            executor.browser.close()
 
 
 if __name__ == "__main__":
