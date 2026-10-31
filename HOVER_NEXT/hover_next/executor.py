@@ -136,13 +136,11 @@ class Executor:
             if errors:
                 print("[google-cuenta] Advertencias: "+"; ".join(errors),flush=True)
             if found and found[0].url:
-                from .desktop import webbrowser
                 webbrowser.open_new_tab(found[0].url)
             return (f"En tu cuenta Google: {len(found)} resultados. "
                     +"Primero: "+found[0].title[:60] if found else result)
         if action == 'google_create_doc':
             from .google_workspace import docs_create
-            from .desktop import webbrowser
             doc=docs_create(intent.args["title"])
             webbrowser.open_new_tab(doc.url)
             return "Documento creado en tu Google: "+doc.title
