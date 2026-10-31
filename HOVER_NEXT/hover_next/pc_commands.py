@@ -42,6 +42,16 @@ def _where(t):
 def parse_pc_command(text: str):
     """Return (action,args) for a bounded file command, or None."""
     t=_clean(text)
+    # Explorer windows are not always foreground when Windhawk/PowerShell
+    # receives focus. These are narrowly identified user folder windows.
+    folder_close=re.fullmatch(
+        r"(?:cierra|cerrar|cierrame|cerrame|sierra|termina)\s+"
+        r"(?:(?:la|el|mi)\s+)?"
+        r"(?:(?:ventana|carpeta|explorador)\s+(?:de|del)\s+)?"
+        r"(descargas|documentos)",t)
+    if folder_close:
+        return "pc_close_window",{"app":_where(folder_close.group(1))}
+
     # Explicit foreground-window operations only. No killing processes or
     # accidentally closing arbitrary background/system applications.
     close = re.fullmatch(
