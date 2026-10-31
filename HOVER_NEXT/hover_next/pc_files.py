@@ -267,7 +267,7 @@ def _safe_window_info(win32gui, hwnd):
 def _app_window_matches(app, clazz, title):
     """Strict identity checks to avoid closing an unrelated application."""
     title=title.casefold()
-    if app in ("explorer","downloads","documents"):
+    if app in ("explorer","downloads","documents","pictures","videos","music"):
         return clazz in ("CabinetWClass","ExploreWClass")
     classes={
         "excel":("XLMAIN",),
@@ -339,8 +339,13 @@ def _specific_explorer_folder(win32gui, app, handles):
             pass
         finally:
             pythoncom.CoUninitialize()
-    labels=(("descargas","downloads") if app=="downloads"
-            else ("documentos","documents"))
+    labels={
+        "downloads":("descargas","downloads"),
+        "documents":("documentos","documents"),
+        "pictures":("imágenes","imagenes","fotos","pictures"),
+        "videos":("vídeos","videos"),
+        "music":("música","musica","music"),
+    }.get(app,())
     for hwnd in handles:
         info=_safe_window_info(win32gui,hwnd)
         if info and _app_window_matches("explorer",*info):
@@ -375,7 +380,7 @@ def close_foreground_window(app: str) -> str:
         # did not include it; still require strict app identity checks.
         if current and current not in handles:
             handles.insert(0,current)
-        if app in ("downloads","documents"):
+        if app in ("downloads","documents","pictures","videos","music"):
             hwnd=_specific_explorer_folder(win32gui,app,handles)
         else:
             candidates=[h for h in handles if
