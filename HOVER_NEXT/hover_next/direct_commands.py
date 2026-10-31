@@ -85,10 +85,10 @@ def parse_direct(text: str) -> Intent | None:
 
     launching = has(t, "abre", "abrir", "muestra", "muestrame", "inicia",
                     "ejecuta", "crea", "crear", "nuevo", "nueva",
-                    "redacta", "redactar", "entra", "visita")
+                    "redacta", "redactar", "entra", "visita", "cree")
     if not launching:
         return None
-    new = has(t, "crea", "crear", "nuevo", "nueva")
+    new = has(t, "crea", "crear", "cree", "nuevo", "nueva")
 
     # Office means the locally installed Microsoft application.
     for office in ("word", "excel", "powerpoint"):
