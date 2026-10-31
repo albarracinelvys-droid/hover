@@ -30,7 +30,7 @@ def _bridge_path():
 
 
 def _clean(value,length=95):
-    return re.sub(r"[\t\r\n\\x00-\\x1f]+"," "," ".join(str(value).split()))[:length]
+    return re.sub(r"[\t\r\n\x00-\x1f]+"," "," ".join(str(value).split()))[:length]
 
 
 def _google_link(raw):
