@@ -54,7 +54,8 @@ WEB_SHORTCUTS = {
 GOOGLE_ALIASES = {
     "google_drive": ("google drive", "mi drive", "abre drive", "drive de google"),
     "google_docs": ("google docs", "docs de google", "documentos de google",
-                    "documento de google"),
+                    "documento de google", "documento en google",
+                    "documentos en google"),
     "google_sheets": ("google sheets", "sheets", "hoja de calculo",
                       "hojas de calculo", "hoja de google"),
     "google_slides": ("google slides", "presentaciones de google",
