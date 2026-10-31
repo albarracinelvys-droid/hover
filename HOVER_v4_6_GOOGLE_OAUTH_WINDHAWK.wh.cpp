@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id hover-island-v38-hardware
-// @name HOVER v4.7 - Calendar interactivo y Google OAuth
+// @name HOVER v4.8 - Spotify interactivo y Calendar
 // @description Calendario interactivo con eventos de Google, detalles por día y enlaces, vía motor Python local.
-// @version 4.7.0
+// @version 4.8.0
 // @author HOVER - version de prueba
 // @include explorer.exe
 // @architecture x86-64
@@ -955,30 +955,26 @@ void Command(int id) {
     if(id==5) {SendMediaKey(VK_VOLUME_UP);return;}
     if(id==6) {SendMediaKey(VK_VOLUME_MUTE);return;}
 
-    // Playback siempre usa las teclas multimedia UNIVERSALES de Windows.
-    // No se dirige solo a Spotify; funcionan con navegador, VLC, etc.
+    // Playback buttons now talk to the media bridge's currently selected
+    // Windows session. No global Play/Pause, which could pause Chrome while
+    // the user is asking to play Spotify.
     if(id==1||id==2||id==3) {
-        bool hasMedia=false;
-        {
-            std::lock_guard<std::mutex> lock(g_mediaGuard);
-            hasMedia=!g_media.source.empty()||!g_media.title.empty();
-        }
-        // Solo abrir Spotify si el puente confirma que NO existe sesion activa.
-        // Sin puente no inferimos que el resto de aplicaciones esté cerrado.
-        if(g_autoOpenSpotify&&g_bridgeOnline&&!hasMedia) {
-            // Abrir una app no garantiza crear una sesion inmediatamente.
-            // Reintentamos UNA sola tecla al detectar su sesion multimedia.
-            OpenSpotify();
-            g_pendingMediaAction=id;
-            g_pendingMediaExpires=GetTickCount64()+12000ULL;
+        MediaState state;
+        {std::lock_guard<std::mutex> guard(g_mediaGuard);state=g_media;}
+        if(g_bridgeOnline && state.spotify) {
+            if(id==1)WriteBridgeCommand("play");
+            if(id==2)WriteBridgeCommand("prev");
+            if(id==3)WriteBridgeCommand("next");
             return;
         }
-        if(id==1)SendMediaKey(VK_MEDIA_PLAY_PAUSE);
-        if(id==2)SendMediaKey(VK_MEDIA_PREV_TRACK);
-        if(id==3)SendMediaKey(VK_MEDIA_NEXT_TRACK);
+        // If Spotify has no media session yet, opening the app is the only
+        // supported non-destructive action. Never toggle Chrome or another
+        // media player when the user clicked the Spotify Play button.
+        if(id==1)OpenSpotify();
         return;
     }
-    if(id==7&&g_bridgeOnline)WriteBridgeCommand("shuffle");
+    if(id==7 && g_bridgeOnline)WriteBridgeCommand("shuffle");
+
 }
 
 void ClockText(wchar_t (&text)[32]) {
@@ -1175,7 +1171,7 @@ void PageMusic(Graphics& g) {
          138,132,362,18,10.5f,Color(255,157,216,177),true);
     Text(g,hasMedia?m.title:L"Sin cancion detectada",138,154,362,30,18.0f,Color(255,247,248,251),true);
     Text(g,hasMedia?(m.artist.empty()?L"Artista no disponible":m.artist):
-         (g_bridgeOnline?L"El puente esta activo, reproduce algo en Spotify o en otra app":L"Sin puente: los botones siguen actuando como controles multimedia globales"),
+         (g_bridgeOnline?L"Selecciona una cancion en Spotify para mostrarla aqui":L"Inicia HOVER para conectar portada y controles"),
          138,185,360,28,11.8f,Color(235,187,191,202),false,false,true);
     SolidBrush track(Color(175,67,72,81));
     g.FillRectangle(&track,RectF(37.0f,226.0f,462.0f,3.0f));
@@ -1183,16 +1179,29 @@ void PageMusic(Graphics& g) {
         SolidBrush progress(Color(255,ac.GetR(),ac.GetG(),ac.GetB()));
         g.FillRectangle(&progress,RectF(37.0f,226.0f,462.0f*m.progress,3.0f));
     }
-    // Los controles reaccionan a hover y clic sin borde ni anillo.
+    // Smooth visual feedback: hover breathes, clicks draw a fading ripple
+    // for ~650ms. No enlargement or popup outside the music page.
     const float centers[]={157.0f,213.0f,268.0f,323.0f,379.0f};
     const int actions[]={107,102,101,103,108};
     for(int i=0;i<5;i++) {
         bool hot=g_hoverAction==actions[i];
-        bool pushed=g_feedbackAction==actions[i] && GetTickCount64()<g_feedbackUntil;
-        if(hot||pushed){
-            const BYTE alpha=BYTE(pushed?178:82);
+        const ULONGLONG tick=GetTickCount64();
+        bool pushed=g_feedbackAction==actions[i] && tick<g_feedbackUntil;
+        if(hot || pushed) {
+            float breath=0.5f+0.5f*std::sin(float(tick%1300)*0.004833219f);
+            BYTE alpha=BYTE(pushed?185:65+int(30.0f*breath));
             SolidBrush highlight(Color(alpha,35,43,57));
-            g.FillEllipse(&highlight,centers[i]-22.0f,257.0f,44.0f,44.0f);
+            float size=hot?48.0f+2.0f*breath:46.0f;
+            g.FillEllipse(&highlight,centers[i]-size*0.5f,
+                          279.0f-size*0.5f,size,size);
+        }
+        if(pushed) {
+            float t=1.0f-float(g_feedbackUntil-tick)/650.0f;
+            float radius=20.0f+15.0f*t;
+            const BYTE fade=BYTE(190.0f*(1.0f-t));
+            Pen ripple(Color(fade,ac.GetR(),ac.GetG(),ac.GetB()),1.6f);
+            g.DrawEllipse(&ripple,centers[i]-radius,279.0f-radius,
+                          radius*2.0f,radius*2.0f);
         }
     }
     DrawShuffleIcon(g,157.0f,279.0f,m.shuffle);
@@ -1204,7 +1213,8 @@ void PageMusic(Graphics& g) {
     Button(g,73,310,42,30,L"−",true,104);
     Button(g,122,310,42,30,L"+",true,105);
     Button(g,172,310,93,30,L"SILENCIO",false,106);
-    Text(g,L"Control multimedia de Windows",326,311,182,27,10.0f,
+    Text(g,g_bridgeOnline?(m.spotify?L"SPOTIFY · CONECTADO":L"SPOTIFY SIN SESION"):
+         L"PUENTE SIN CONEXION",320,311,190,27,10.0f,
          Color(205,184,194,208),false,true);
 }
 
@@ -1996,7 +2006,7 @@ void OpenGoogleAccountManager(HWND owner) {
 
 void Execute(HWND hwnd,int action) {
     g_feedbackAction=action;
-    g_feedbackUntil=GetTickCount64()+360;
+    g_feedbackUntil=GetTickCount64()+650;
     // El ultimo icono del reproductor abre su aplicacion en vez de quedar inactivo.
     if(action==108){OpenSpotify();return;}
     if(action>=500 && action<500+int(g_voiceTabs.size())){

@@ -342,6 +342,11 @@ def run(executor, *, engine="auto", model="small",
     # only reads a small local snapshot while the user opens its Calendar tab.
     from .calendar_bridge import start_background
     start_background(stop)
+    # Start the local Windows Media bridge automatically; it supplies current
+    # track title, album art, state and button commands to Windhawk without a
+    # separate PowerShell process.
+    from .media_bridge import start_background as start_media_bridge
+    start_media_bridge(stop)
 
     def recognizer_worker():
         try:

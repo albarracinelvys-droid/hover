@@ -117,7 +117,7 @@ class SpotifyPlaybackTests(unittest.TestCase):
             message=desktop.spotify_start_playback(open_app=True,play=True)
         self.assertIn("no detectó una sesión",message)
         toggle.assert_not_called()
-        self.assertEqual(sleep.call_count,3)
+        self.assertEqual(sleep.call_count,4)
 
     def test_windows_confirmed_playback_is_reported(self):
         with patch("hover_next.desktop.sys.platform","win32"), \
