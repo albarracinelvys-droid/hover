@@ -792,7 +792,7 @@ void ReadVoiceTabs() {
 
 void ReadCalendarBridge() {
     // Read only local metadata written by Python. No OAuth tokens or network.
-    std::string blob=ReadSmallFile(L"calendar_events.tsv",32768);
+    std::string blob=ReadSmallFile(L"calendar_events.tsv",262144);
     static std::string previous;
     if(blob==previous)return;
     previous=blob;
@@ -1238,6 +1238,7 @@ void PageCalendar(Graphics& g) {
     Round(g,17,114,502,223,21,Color(200,19,22,31),Color(0,0,0,0),0.0f);
     wchar_t monthTitle[80]{};swprintf(monthTitle,80,L"%ls  %d",months[mo],year);
     Text(g,monthTitle,33,123,278,27,18,Color(255,248,248,252),true);
+    Button(g,306,119,96,36,L"+ NUEVO",true,654);
     Button(g,407,119,43,36,L"<",true,401);
     Button(g,459,119,43,36,L">",true,402);
     for(int col=0;col<7;col++) Text(g,weekdays[col],36+col*68,159,53,20,11,Color(230,165,169,182),true,true);
@@ -1503,7 +1504,11 @@ int HitAction(float x,float y) {
             }
             if(y>=228&&y<334&&x>=32&&x<503)return -1;
         }
-        if(y>=119&&y<155){if(x>=407&&x<450)return 401;if(x>=459&&x<502)return 402;}
+        if(y>=119&&y<155){
+            if(x>=306&&x<402)return 654;
+            if(x>=407&&x<450)return 401;
+            if(x>=459&&x<502)return 402;
+        }
         if(y>=184&&y<334&&x>=36&&x<510){
             int year=0,month=0;VisibleCalendarMonth(year,month);
             SYSTEMTIME f{};f.wYear=WORD(year);f.wMonth=WORD(month);f.wDay=1;
@@ -2009,6 +2014,10 @@ void Execute(HWND hwnd,int action) {
         return;
     }
     if(action==652){g_calendarDetailsOpen=false;return;}
+    if(action==654){
+        OpenUrl(L"https://calendar.google.com/calendar/u/0/r/eventedit");
+        return;
+    }
     if(action==650){
         int year=0,month=0;VisibleCalendarMonth(year,month);
         auto events=DayEvents(year,month,g_calendarSelectedDay);
