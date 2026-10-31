@@ -84,7 +84,9 @@ def _question(text: str) -> str:
         r"^(?:qu[eé]|c[oó]mo|cu[aá]l|cu[aá]nt[oa]s?|"
         r"d[oó]nde|qui[eé]n|cu[aá]ndo|por qu[eé])\b", prompt, re.IGNORECASE
     ):
-        return ("¿" if not prompt.startswith("¿") else "") + prompt.rstrip("?. ") + "?"
+        question = prompt.rstrip("?. ")
+        question = question[:1].upper() + question[1:]
+        return ("¿" if not question.startswith("¿") else "") + question + "?"
     return prompt
 
 
