@@ -72,7 +72,8 @@ class Executor:
             project = intent.args.get("project", "").casefold()
             project_url = ""
             if project:
-                project_url = self.config.get("projects", {}).get(provider, {}).get(project, "")
+                from .projects import get_project_url
+                project_url = get_project_url(self.config, provider, project)
                 if not project_url:
                     raise ValueError(
                         f"Configura primero la URL real del proyecto {project} de {provider}. "
@@ -108,10 +109,11 @@ class Executor:
             return f'Abriendo nueva conversacion en {provider}.'
         if action=='open_project':
             name=intent.args.get('name','').strip().casefold()
-            projects=self.config.get('projects',{}).get(provider,{})
-            if not name or name not in projects:
-                return f'No tengo la URL del proyecto {name!r} en {provider}; configurala en config.json.'
-            return self.browser.open_project(provider,projects[name])
+            from .projects import get_project_url
+            url = get_project_url(self.config,provider,name) if name else ""
+            if not url:
+                return f'No tengo la URL del proyecto {name!r} en {provider}; añadela desde Atajos en HOVER.'
+            return self.browser.open_project(provider,url)
         if action=='close_tab':
             self.browser.close_tab(provider)
             return f'Cerrada la ultima pestana de {provider} controlada por HOVER.'
