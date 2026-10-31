@@ -7,6 +7,35 @@ from .executor import Executor, confirm_intent, confirm_voice_intent
 from .ui_bridge import publish, status_page
 
 
+def voice_may_autocreate_private_repo(command, intent) -> bool:
+    """Allow a clear voice command to create a private repo without a dialog.
+
+    The user explicitly opted into this workflow. Transcripts with tentative
+    wording or unclear/missing names still require visual confirmation.
+    This exception applies ONLY to private repository creation, never other
+    file modifications, payments or deletions.
+    """
+    if intent.action != "create_private_repo":
+        return False
+    from .intent import normalize
+    import re
+    from .wake import extract_wake
+    spoken = extract_wake(command)
+    if spoken is None:
+        return False
+    t = normalize(spoken)
+    if not re.search(r'\b(?:crea|crear|creame|genera)\b', t):
+        return False
+    if not re.search(r'\b(?:repositorio|repo)\b', t):
+        return False
+    if not re.search(r'\bprivad[oa]\b', t):
+        return False
+    if not re.search(r'\b(?:que se llam[ae]|llamad[oa]|con el nombre de)\b',t):
+        return False
+    name = intent.args.get("name","")
+    return bool(re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,79}",name))
+
+
 def run_one(command, executor, *, voice_mode=False):
     intent = parse(command)
     print("Interpretado:", intent, flush=True)
@@ -14,12 +43,17 @@ def run_one(command, executor, *, voice_mode=False):
         publish("error", "No pude interpretar esa instruccion")
         print("HOVER: No pude interpretar esa instruccion.", flush=True)
         return None
-    if intent.requires_confirmation:
+    auto_repo = voice_mode and voice_may_autocreate_private_repo(command,intent)
+    if intent.requires_confirmation and not auto_repo:
         publish("thinking", "Confirmar antes de ejecutar: " + intent.action, status_page(intent.action))
         if not (confirm_voice_intent(intent) if voice_mode else confirm_intent(intent)):
             publish("ok", "Operacion cancelada")
             print("Cancelado; no se realizo ninguna accion.", flush=True)
             return None
+    if auto_repo:
+        print("[github] Creacion privada autorizada por la orden de voz explicita: "
+              +intent.args["name"],flush=True)
+        publish("thinking", "Creando repo privado: "+intent.args["name"], 3)
     try:
         publish("thinking", "Ejecutando: " + intent.action, status_page(intent.action))
         result = executor.execute(intent, confirmed=True)
