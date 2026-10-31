@@ -18,7 +18,7 @@ def _normal(text: str) -> str:
 
 
 def spoken_name(text: str, kind: str = "txt") -> str:
-    if kind not in ("txt","folder","excel","repo"):
+    if kind not in ("txt","folder","excel","repo","word","csv"):
         return ""
     # Reject paths before normalization removes punctuation.
     if "/" in text or "\\" in text or ":" in text or ".." in text:
