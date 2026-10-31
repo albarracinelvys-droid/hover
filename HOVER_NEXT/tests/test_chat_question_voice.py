@@ -89,5 +89,46 @@ class ChatQuestionTests(unittest.TestCase):
         self.assertEqual(executed[0].action, "chat_compose")
         self.assertEqual(d.dictation_provider, "")
 
+class BrowserSubmissionTests(unittest.TestCase):
+    def test_composer_receives_exact_text_and_enter(self):
+        from hover_next.browser import BrowserBridge
+        page = MagicMock()
+        page.is_closed.return_value = False
+        page.url = "https://chatgpt.com/"
+        editor = MagicMock()
+        editor.count.return_value = 1
+        editor.is_visible.return_value = True
+        page.locator.return_value.last = editor
+        browser = BrowserBridge(Path("dummy"))
+        browser.prepared = ("chatgpt", page)
+        result = browser.send_prepared("chatgpt", "¿Cómo estás?")
+        editor.fill.assert_called_once_with("¿Cómo estás?", timeout=10000)
+        editor.press.assert_called_once_with("Enter", timeout=10000)
+        self.assertIn("Enter", result)
+        self.assertIsNone(browser.prepared)
+
+    def test_not_sent_to_login_redirect(self):
+        from hover_next.browser import BrowserBridge, BrowserUnavailable
+        page = MagicMock()
+        page.url = "https://auth.openai.com/"
+        page.is_closed.return_value = False
+        browser = BrowserBridge(Path("dummy"))
+        browser.prepared = ("chatgpt", page)
+        with self.assertRaises(BrowserUnavailable):
+            browser.send_prepared("chatgpt", "¿Cómo estás?")
+        page.locator.assert_not_called()
+
+    def test_no_editor_reports_separate_profile(self):
+        from hover_next.browser import BrowserBridge, BrowserUnavailable
+        page = MagicMock()
+        page.url = "https://chatgpt.com/"
+        page.is_closed.return_value = False
+        page.locator.return_value.last.count.return_value = 0
+        browser = BrowserBridge(Path("dummy"))
+        browser.prepared = ("chatgpt", page)
+        with self.assertRaisesRegex(BrowserUnavailable, "Chrome independiente"):
+            browser.send_prepared("chatgpt", "¿Cómo estás?")
+
+
 if __name__ == "__main__":
     unittest.main()
