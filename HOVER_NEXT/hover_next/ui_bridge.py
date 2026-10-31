@@ -41,6 +41,9 @@ def status_page(action: str) -> int:
         return 0
     if action in ("copy_latest_download","move_latest_download"):
         return 1
+    if action in ("chat_prepare", "chat_compose", "chat_send_prepared",
+                  "google_app", "windows_app", "office_new", "open_document"):
+        return 3
     if action in ("open_site", "new_chat", "new_chat_and_send", "open_project",
                   "close_tab", "send_prompt", "upload_file", "create_private_repo"):
         return 3
