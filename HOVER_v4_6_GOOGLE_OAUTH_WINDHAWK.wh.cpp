@@ -961,13 +961,16 @@ void Command(int id) {
     if(id==1||id==2||id==3) {
         MediaState state;
         {std::lock_guard<std::mutex> guard(g_mediaGuard);state=g_media;}
-        if(g_bridgeOnline && (!state.source.empty()||!state.title.empty())) {
+        if(g_bridgeOnline && state.spotify) {
             if(id==1)WriteBridgeCommand("play");
             if(id==2)WriteBridgeCommand("prev");
             if(id==3)WriteBridgeCommand("next");
             return;
         }
-        if(id==1 && g_autoOpenSpotify)OpenSpotify();
+        // If Spotify has no media session yet, opening the app is the only
+        // supported non-destructive action. Never toggle Chrome or another
+        // media player when the user clicked the Spotify Play button.
+        if(id==1)OpenSpotify();
         return;
     }
     if(id==7 && g_bridgeOnline)WriteBridgeCommand("shuffle");
@@ -1210,7 +1213,7 @@ void PageMusic(Graphics& g) {
     Button(g,73,310,42,30,L"−",true,104);
     Button(g,122,310,42,30,L"+",true,105);
     Button(g,172,310,93,30,L"SILENCIO",false,106);
-    Text(g,g_bridgeOnline?(m.spotify?L"SPOTIFY · CONECTADO":L"SESION DE WINDOWS"):
+    Text(g,g_bridgeOnline?(m.spotify?L"SPOTIFY · CONECTADO":L"SPOTIFY SIN SESION"):
          L"PUENTE SIN CONEXION",320,311,190,27,10.0f,
          Color(205,184,194,208),false,true);
 }
