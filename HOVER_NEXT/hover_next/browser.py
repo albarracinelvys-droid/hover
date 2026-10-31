@@ -151,6 +151,18 @@ class BrowserBridge:
                 "verifica que aparezca enviado en el navegador.")
 
     def close(self):
+        """Idempotent cleanup; called by the browser's owning thread only."""
         self.prepared=None
-        if self.context:self.context.close();self.context=None
-        if self.p:self.p.stop();self.p=None
+        context,self.context=self.context,None
+        playwright,self.p=self.p,None
+        if context is not None:
+            try:
+                context.close()
+            except Exception as exc:
+                # Chrome may already have been closed by the user.
+                print("[chat] Chrome ya estaba cerrado:",type(exc).__name__,flush=True)
+        if playwright is not None:
+            try:
+                playwright.stop()
+            except Exception as exc:
+                print("[chat] Playwright ya estaba detenido:",type(exc).__name__,flush=True)
