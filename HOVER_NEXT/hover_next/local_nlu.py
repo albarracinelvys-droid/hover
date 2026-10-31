@@ -94,11 +94,11 @@ def warm_model():
     """Optionally preload the local model without delaying the mic thread.
 
     Ollama's empty prompt loads the weights but does not classify an intent,
-    write a file, or run any action. Disable with HOVER_NLU_PREWARM=0 on
-    memory-constrained computers.
+    write a file, or run any action. Enable with HOVER_NLU_PREWARM=1 on
+    computers with enough memory; disabled by default to avoid slowing Whisper.
     """
     if (os.environ.get("HOVER_NLU","auto").lower()=="off" or
-            os.environ.get("HOVER_NLU_PREWARM","1").lower() in ("0","false","no")):
+            os.environ.get("HOVER_NLU_PREWARM","0").lower() in ("0","false","no")):
         return False
     model=os.environ.get("HOVER_NLU_MODEL",DEFAULT_MODEL)
     if not re.fullmatch(r"[A-Za-z0-9][\w.:-]{1,80}",model):
