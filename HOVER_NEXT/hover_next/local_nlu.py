@@ -87,6 +87,36 @@ PROMPT=(
 _CACHE_LOCK=threading.Lock()
 _CACHE={}
 _MISSING_UNTIL=0.0
+MODEL_KEEP_ALIVE="20m"
+
+
+def warm_model():
+    """Optionally preload the local model without delaying the mic thread.
+
+    Ollama's empty prompt loads the weights but does not classify an intent,
+    write a file, or run any action. Disable with HOVER_NLU_PREWARM=0 on
+    memory-constrained computers.
+    """
+    if (os.environ.get("HOVER_NLU","auto").lower()=="off" or
+            os.environ.get("HOVER_NLU_PREWARM","1").lower() in ("0","false","no")):
+        return False
+    model=os.environ.get("HOVER_NLU_MODEL",DEFAULT_MODEL)
+    if not re.fullmatch(r"[A-Za-z0-9][\w.:-]{1,80}",model):
+        return False
+    payload=json.dumps({
+        "model":model,"prompt":"","stream":False,
+        "keep_alive":MODEL_KEEP_ALIVE
+    }).encode("utf-8")
+    try:
+        req=Request(HOST+"/api/generate",data=payload,
+                    headers={"Content-Type":"application/json"},method="POST")
+        with urlopen(req,timeout=25) as response:
+            response.read(4096)
+        print("[modelo] Qwen local preparado para órdenes de voz.",flush=True)
+        return True
+    except (URLError,OSError,TimeoutError,ValueError):
+        return False
+
 
 
 def clean(value):
@@ -237,8 +267,9 @@ def model_intent(spoken):
         "messages":[{"role":"system","content":PROMPT},
                     {"role":"user","content":spoken}],
         "format":SCHEMA,"options":{"temperature":0,"num_predict":256},
-        "keep_alive":"10m"
+        "keep_alive":MODEL_KEEP_ALIVE
     },ensure_ascii=False).encode("utf-8")
+    started=time.monotonic()
     try:
         req=Request(HOST+"/api/chat",data=request,headers={
             "Content-Type":"application/json"},method="POST")
@@ -248,6 +279,8 @@ def model_intent(spoken):
         msg=wrapper.get("message",{})
         decoded=json.loads(msg.get("content",""))
         answer=validate(decoded,spoken)
+        print(f"[latencia] modelo_local={(time.monotonic()-started)*1000:.0f}ms",
+              flush=True)
     except (URLError,OSError,ValueError,KeyError,TypeError,TimeoutError):
         # Brief circuit-breaker when Ollama is absent; voice keeps working.
         with _CACHE_LOCK:
