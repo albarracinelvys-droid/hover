@@ -213,6 +213,57 @@ def open_document(name: str = "") -> str:
     return f"Documento abierto: {target.name}"
 
 
+def _spotify_session_play() -> bool:
+    """Best-effort non-toggle PLAY with optional Windows media session API.
+
+    This is preferable to VK_MEDIA_PLAY_PAUSE because a toggle can pause a
+    track that is already playing. Windows SDK bindings are optional.
+    """
+    try:
+        import asyncio
+        from winsdk.windows.media.control import (
+            GlobalSystemMediaTransportControlsSessionManager as SessionManager
+        )
+
+        async def try_play():
+            manager = await SessionManager.request_async()
+            for session in manager.get_sessions():
+                if "spotify" in str(session.source_app_user_model_id).casefold():
+                    return bool(await session.try_play_async())
+            return False
+
+        return asyncio.run(try_play())
+    except Exception:
+        return False
+
+
+def spotify_start_playback(open_app: bool = True) -> str:
+    """Launch Spotify and request playback; never claim audio is confirmed."""
+    if sys.platform != "win32":
+        raise ActionUnavailable("Spotify por voz necesita Windows.")
+    if open_app:
+        try:
+            os.startfile("spotify:")
+            opened = True
+        except (OSError,AttributeError):
+            opened = webbrowser.open_new_tab("https://open.spotify.com/")
+        if not opened:
+            raise ActionUnavailable(
+                "No pude abrir Spotify. Comprueba que esté instalado o usa Spotify Web."
+            )
+        # Give the desktop app time to register its media session.
+        import time
+        time.sleep(1.2)
+    if _spotify_session_play():
+        return ("Solicité reproducir en la sesión de Spotify de Windows. "
+                "Comprueba que haya música.")
+    # Media key fallback can toggle playback/pause, not guarantee PLAY.
+    send_media_key("play_pause")
+    return ("Envié reproducir/pausar al reproductor de Windows. "
+            "Si Spotify no suena, abre una lista y elige una canción primero; "
+            "el sistema no confirmó el audio.")
+
+
 def send_media_key(key: str) -> str:
     """Send a Windows global media key. Does not select a particular player."""
     if sys.platform != "win32":
