@@ -36,27 +36,6 @@ def voice_may_autocreate_private_repo(command, intent) -> bool:
     return bool(re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,79}",name))
 
 
-def run_confirmed_delete(intent,executor):
-    """Execute only the frozen file deletion explicitly approved by voice."""
-    if (intent.action!="pc_delete" or not intent.requires_confirmation
-            or intent.args.get("pick")!="name"
-            or not all(key in intent.args for key in
-                       ("location","name","size","mtime_ns"))):
-        publish("error","La eliminación no tiene una confirmación válida.")
-        return None
-    try:
-        publish("thinking","Enviando a la Papelera: "+intent.args["name"],3)
-        result=executor.execute(intent,confirmed=True)
-        publish("ok",str(result),3)
-        print("HOVER:",result,flush=True)
-        return result
-    except Exception as exc:
-        error=f"{type(exc).__name__}: {exc}"
-        print("HOVER - error controlado:",error,flush=True)
-        publish("error",error)
-        return None
-
-
 def run_one(command, executor, *, voice_mode=False):
     intent = parse(command)
     print("Interpretado:", intent, flush=True)
@@ -64,16 +43,11 @@ def run_one(command, executor, *, voice_mode=False):
         publish("error", "No pude interpretar esa instruccion")
         print("HOVER: No pude interpretar esa instruccion.", flush=True)
         return None
-    if intent.action == "pc_delete" and voice_mode:
-        # VoiceDialogue owns the separate "sí/no" confirmation sequence.
-        # Direct voice calls never bypass this two-utterance gate.
-        publish("error","Para eliminar, responde sí al diálogo de HOVER.")
-        return None
     if (intent.action == "pc_delete" or
             (intent.action == "pc_transfer" and
              intent.args.get("pick") == "latest")):
-        # Freeze the exact file before use. Deletion requires this snapshot;
-        # routine transfers keep the same stale-file protection.
+        # Freeze the exact file before immediate execution, preserving
+        # stale-file protection without a separate confirmation dialog.
         try:
             from .pc_files import prepare_transfer, prepare_delete
             args=(prepare_delete(intent.args,executor.config)
