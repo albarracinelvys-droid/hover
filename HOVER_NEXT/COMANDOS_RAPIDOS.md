@@ -6,10 +6,12 @@ automatizado se crea y cierra en el mismo hilo para evitar el error
 
 **Consultas y búsquedas:** no piden confirmar con SI.
 
-**Crear un repositorio privado**: aparece una ventana de confirmación de
-Windows con el nombre reconocido; confirma solo si coincide exactamente.
-Ya no se usa \`input()\` dentro del hilo de reconocimiento. El repositorio
-requiere GitHub CLI instalado y autenticado.
+**Crear un repositorio privado por voz:** si la instrucción incluye claramente
+«crea», «repositorio», «privado» y su nombre, se ejecuta sin confirmación.
+HOVER abre el enlace real de GitHub en Google Chrome y muestra el
+progreso de creación en la isla. «prueba uno en privado» se interpreta
+como `prueba-uno`; las frases dudosas mantienen confirmación.
+Esto no afecta a compras, pagos ni eliminaciones.
 
 **Carpeta seleccionada en la isla:** usa el destino que Windhawk guarda en
 \`%APPDATA%\HOVER\carpeta_favorita.txt\` (UTF-16). Selecciónalo desde
@@ -115,10 +117,13 @@ winget install --id GitHub.cli -e
 gh auth login
 ```
 
-HOVER muestra el nombre que entendió y pide que lo escribas exactamente en
-la consola antes de crearlo. Esto evita que una transcripción incorrecta
-cree un repositorio con un nombre distinto al que querías. Nunca crea un
-repositorio público por esta ruta.
+**En modo voz no se pide confirmación para repositorios privados con un
+nombre claro.** Se ejecuta `gh repo create --private`, se recupera
+la URL real y se abre en Chrome (o en el navegador predeterminado).
+La isla muestra «Creando», «Buscando URL» y «Abriendo Chrome».
+Las transcripciones inseguras conservan la confirmación visual;
+los comandos de texto siguen pidiendo confirmación. Nunca se crea
+un repositorio público por esta ruta.
 
 ## Ejecutar
 ```powershell
