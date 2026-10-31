@@ -37,6 +37,10 @@ class WindhawkGestureTests(unittest.TestCase):
         self.assertIn("const int baseX=",code)
         self.assertIn("const int baseY=",code)
         self.assertIn("std::max(screen.left,screen.right-w)",code)
+        self.assertIn("void SaveIslandPosition()",code)
+        self.assertIn("void LoadIslandPosition()",code)
+        self.assertIn("posicion_isla.txt",code)
+        self.assertIn("if(movedGrip)SaveIslandPosition();",code)
 
     def test_larger_eye_animation(self):
         self.assertIn("const float scale=1.0f+0.75f*smooth;",self.source)
@@ -105,6 +109,21 @@ class DetachedLaunchTests(unittest.TestCase):
              patch("hover_next.launch_background.subprocess.run") as cmd:
             self.assertEqual(launch_background.stop(),0)
         cmd.assert_not_called()
+
+    def test_realtek_launcher_keeps_original_device_and_threshold(self):
+        root=Path(__file__).resolve().parents[1]
+        content=(root/"INICIAR_SILENCIOSO_REALTEK.bat").read_text()
+        self.assertIn("--mic 9 --threshold 0.0006",content)
+        self.assertIn("hover_next.launch_background",content)
+
+    def test_background_launch_preserves_motor_args(self):
+        # The launcher restricts options to known engine/mic/threshold flags.
+        with patch("hover_next.launch_background.start",return_value=0) as launch, \
+             patch("hover_next.launch_background.sys.argv",
+                   ["launcher","--engine","whisper","--mic","9",
+                    "--threshold","0.0006"]):
+            self.assertEqual(launch_background.main(),0)
+        launch.assert_called_once_with(engine="whisper",mic=9,threshold=0.0006)
 
     def test_all_launchers_keep_console_opt_in(self):
         root=Path(__file__).resolve().parents[1]
