@@ -80,10 +80,10 @@ def _parse_google_search(t: str) -> Intent | None:
             q = m.group(1)
     if q is None:
         m = re.fullmatch(
-            r'(?:abre|abrir|muestra)\s+(?:(?:una|la|nueva)\s+)?'
-            r'(?:pestana|presencia|pagina|ventana)\s+'
-            r'(?:de|en)\s+google\s+y\s+'
-            r'(?:busca|buscar|buscame|encuentra)\s+(.+?)\s*',
+            r'(?:abre|abrir|muestra)\s+'
+            r'(?:(?:(?:una|la|nueva)\s+)?'
+            r'(?:pestana|presencia|pagina|ventana)\s+(?:de|en)\s+)?'
+            r'google\s+y\s+(?:busca|buscar|buscame|encuentra)\s+(.+?)\s*',
             t,
         )
         if m:
