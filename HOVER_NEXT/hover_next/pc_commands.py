@@ -52,6 +52,30 @@ def parse_pc_command(text: str):
         }
         return "pc_close_window", {"app":aliases.get(name,"foreground")}
 
+    # If a user omits the name, ask for it in the next voice turn instead
+    # of creating a file with a guessed name such as "en escritorio".
+    unnamed=re.fullmatch(
+        r"(?:crea|crear|creame|genera|haz)\s+"
+        r"(?:(?:un|una)\s+)?(?:(?:nueva|nuevo)\s+)?"
+        r"(carpeta|subcarpeta|excel|archivo excel|archivo de excel|"
+        r"word|documento word|archivo de word|archivo word|"
+        r"archivo de texto|txt|csv)"
+        r"(?:\s+(?:en|dentro de)\s+(?:(?:el|la|mi)\s+)?"
+        r"(?:carpeta de\s+)?"+LOC+r")?",
+        t)
+    if unnamed:
+        kind,where=unnamed.groups()
+        aliases={"carpeta":"folder","subcarpeta":"folder",
+                 "excel":"excel","archivo excel":"excel",
+                 "archivo de excel":"excel",
+                 "word":"word","documento word":"word",
+                 "archivo de word":"word","archivo word":"word",
+                 "archivo de texto":"txt","txt":"txt","csv":"csv"}
+        return "pc_name_needed",{
+            "kind":aliases[kind],
+            "location":_where(where) if where else "desktop",
+        }
+
     # Create an actual saved file, not just a new unsaved Office window.
     # Missing location defaults to the user's Desktop; never system paths.
     # Requiring a recognizable kind + name avoids treating general questions
