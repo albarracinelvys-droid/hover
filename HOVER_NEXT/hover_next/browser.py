@@ -56,22 +56,27 @@ class BrowserBridge:
         if not matched: raise BrowserUnavailable(f'No hay pestaña de {provider} abierta bajo HOVER')
         matched[-1].close();return True
     def send_prompt(self,provider,prompt,file=None,new=False):
+        """Send the spoken prompt without a second approval or misleading status.
+
+        The normal prompt path uses the SAME verified editor as chat_compose.
+        A separately selected file may also be attached, but does not bypass
+        the privacy confirmation enforced by the intent parser.
+        """
         page=self.page(provider,new=new)
         if file:
             chooser=page.locator('input[type="file"]').first
             if chooser.count()==0:
-                raise BrowserUnavailable('No encontre el campo de adjuntos. Abre el chat e inserta el archivo manualmente.')
+                raise BrowserUnavailable(
+                    'No encontré el campo de adjuntos. Abre el chat e inserta el archivo manualmente.')
             chooser.set_input_files(str(file),timeout=10000)
-        if prompt:
-            selectors=['[contenteditable="true"][role="textbox"]','div[contenteditable="true"]','textarea']
-            editor=None
-            for s in selectors:
-                loc=page.locator(s).last
-                if loc.count(): editor=loc;break
-            if editor is None: raise BrowserUnavailable('No encontre el cuadro de texto: inicia sesion y abre un chat.')
-            editor.fill(prompt,timeout=10000)
-            editor.press('Enter')
-        return 'Enviado al navegador; comprueba la respuesta en la pagina.'
+        if prompt and prompt.strip():
+            self.prepared=(provider,page)
+            return self.send_prepared(provider,prompt)
+        if file:
+            return ('Archivo seleccionado en el navegador, pero no se envió '
+                    'ningún mensaje; comprueba el adjunto antes de continuar.')
+        raise ValueError("No hay texto para enviar al chat.")
+
     def prepare_chat(self, provider, project_url=""):
         """Opens a separate browser tab for a new conversation.
 
