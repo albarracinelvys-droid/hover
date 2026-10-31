@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install test dependencies
-        run: python -m pip install 'numpy>=1.26,<3'
+        run: python -m pip install 'numpy>=1.26,<3' 'openpyxl>=3.1,<4' 'python-docx>=1.1,<2'
       - name: Compile Python modules
         working-directory: HOVER_NEXT
         run: python -m compileall -q hover_next tests
