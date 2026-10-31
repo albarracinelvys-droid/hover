@@ -1,3 +1,38 @@
+# HOVER — Google predeterminado para preguntas y búsquedas
+
+HOVER envía **las consultas informativas** a Google automáticamente. No
+necesitas pronunciar «busca en Google». Funciona sin confirmaciones y sin
+respuestas habladas: muestra el resultado en el navegador predeterminado.
+
+Ejemplos:
+- «Hover, ¿qué es un PLC?» → búsqueda en Google.
+- «Hover, ¿cuál es la diferencia entre Python y C++?» → Google.
+- «Hover, ¿cómo funciona un motor eléctrico?» → Google.
+- «Hover, ¿por qué se daña un rodamiento?» → Google.
+- «Hover, investiga mantenimiento industrial» → Google.
+- «Hover, busca materiales SAP» → Google.
+- «Hover, compara Excel y Google Sheets» → Google.
+- «Hover, traduce buenos días al inglés» → **Google Traductor**.
+- «Hover, ¿cómo se dice mantenimiento en inglés?» → Google Traductor.
+
+**Acciones diferentes:** «Hover, abre Word», «crea un TXT», «abre ChatGPT»,
+«reproduce Spotify» y «crea un repositorio privado» siguen funcionando
+como acciones, no como búsquedas. En cambio, «¿cómo crear un repositorio
+privado?» es una pregunta, por lo tanto se busca en Google. La traducción
+predeterminada, si no mencionas idioma destino, se abre en Google Traductor
+hacia inglés.
+
+Actualiza desde PowerShell:
+
+```powershell
+cd C:\Users\gomez\hover
+git pull origin main
+cd .\HOVER_NEXT
+.\INICIAR_HOVER.bat
+```
+
+---
+
 # HOVER — Recuperación del diálogo y Spotify
 
 La voz local sigue usando el motor que ya reconocía tus frases; no se
