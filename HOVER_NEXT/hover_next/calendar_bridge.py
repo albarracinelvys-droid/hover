@@ -76,6 +76,7 @@ def read_calendar_events(now=None):
             "timeMax":finish.isoformat(),
             "singleEvents":True,
             "orderBy":"startTime",
+            "timeZone":"America/Bogota",
             "maxResults":min(250,_MAX_EVENTS-len(result)),
             "fields":"nextPageToken,items(summary,start(date,dateTime),htmlLink)",
         }
