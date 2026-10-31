@@ -94,6 +94,25 @@ class FlexibleAppVoiceTests(unittest.TestCase):
                 self.assertEqual(i.action,action)
                 self.assertIn(value,i.args.values())
 
+    def test_natural_file_requests_do_not_require_a_fixed_phrase(self):
+        cases=(
+            ("Hover, hazme una carpeta llamada ejercicios en documentos",
+             "folder","ejercicios","documents"),
+            ("Hover, quiero que me crees un Excel llamado inventario en documentos",
+             "excel","inventario","documents"),
+            ("Hover, podrías crear una carpeta llamada planes en el escritorio",
+             "folder","planes","desktop"),
+            ("Hover, prepara un Word llamado minuta en el escritorio",
+             "word","minuta","desktop"),
+        )
+        for spoken,kind,name,folder in cases:
+            with self.subTest(spoken=spoken):
+                intent=parse(spoken)
+                self.assertEqual(intent.action,"pc_create")
+                self.assertEqual(intent.args,{
+                    "kind":kind,"name":name,"location":folder})
+                self.assertFalse(intent.requires_confirmation)
+
     def test_unreliable_english_gibberish_does_not_close_anything(self):
         for transcript in ("sierra explorer the truth",
                            "sierra exploraordertools",
