@@ -28,19 +28,58 @@ class WindhawkGestureTests(unittest.TestCase):
 
     def test_between_eye_grip_physically_moves_island_not_pages(self):
         code=self.source
-        self.assertIn("const float centerX=float(r.right-r.left)*0.5f;",code)
-        self.assertIn("std::abs(localX-centerX)<=16.0f",code)
+        self.assertIn("bool IsEyeGripScreenPoint(HWND hwnd,const POINT& point)",code)
+        self.assertIn("std::abs(point.x-middle)<=23",code)
+        self.assertIn("const int middle=(bounds.left+bounds.right)/2;",code)
         self.assertIn("g_islandShiftX=g_grabStartShiftX+dx;",code)
         self.assertIn("g_islandShiftY=g_grabStartShiftY+dy;",code)
         self.assertIn("g_eyeGripDrag=false;",code)
-        self.assertIn("if(releasedGrip){",code)
+        self.assertIn("void FinishEyeGrip(HWND hwnd)",code)
+        self.assertIn("case kEyeGripEnd:",code)
         self.assertIn("const int baseX=",code)
         self.assertIn("const int baseY=",code)
         self.assertIn("std::max(screen.left,screen.right-w)",code)
         self.assertIn("void SaveIslandPosition()",code)
         self.assertIn("void LoadIslandPosition()",code)
         self.assertIn("posicion_isla.txt",code)
-        self.assertIn("if(movedGrip)SaveIslandPosition();",code)
+        self.assertIn("if(moved)SaveIslandPosition();",code)
+
+    def test_low_level_click_interception_works_when_layered_window_misses_click(self):
+        code=self.source
+        hook=code.split("LRESULT CALLBACK LowLevelWheelHook",1)[1].split(
+            "LRESULT CALLBACK HoverKeyboardHook",1)[0]
+        self.assertIn("wp==WM_LBUTTONDOWN",hook)
+        self.assertIn("wp==WM_LBUTTONUP",hook)
+        self.assertIn("IsEyeGripScreenPoint(hwnd,e->pt)",hook)
+        self.assertIn("PostMessageW(hwnd,kEyeGripBegin,0,0)",hook)
+        self.assertIn("PostMessageW(hwnd,kEyeGripEnd,0,0)",hook)
+        self.assertIn("g_hookGripActive.exchange(false)",hook)
+        self.assertIn("if(!(e->flags & LLMHF_INJECTED))",hook)
+        self.assertIn("return CallNextHookEx(nullptr,code,wp,lp);",hook)
+        # The hook must not swallow arbitrary clicks outside the tiny grip.
+        self.assertIn("std::abs(point.x-middle)<=23",code)
+        self.assertIn("point.y>=bounds.top+2",code)
+        self.assertIn("point.y<=bounds.top+44",code)
+
+    def test_grip_mouse_up_commits_position_without_swiping_pages(self):
+        code=self.source
+        block=code.split("case WM_LBUTTONUP:",1)[1].split(
+            "case WM_CAPTURECHANGED:",1)[0]
+        self.assertIn("if(g_eyeGripDrag)",block)
+        self.assertIn("FinishEyeGrip(hwnd);",block)
+        self.assertIn("return 0;",block)
+        self.assertIn("ChangePage(",block)
+        begin=code.split("case kEyeGripBegin:",1)[1].split(
+            "case kArrowNavigation:",1)[0]
+        self.assertIn("BeginEyeGrip(hwnd,pointer);",begin)
+        self.assertIn("FinishEyeGrip(hwnd);",begin)
+
+    def test_eyes_are_closer_without_disabling_large_eye_animation(self):
+        self.assertIn("const float eyeCenter=cx+(i==0?-14.2f:14.2f);",
+                      self.source)
+        self.assertNotIn("?-16.4f:16.4f",self.source)
+        self.assertIn("const float scale=1.0f+0.75f*smooth;",
+                      self.source)
 
     def test_larger_eye_animation(self):
         self.assertIn("const float scale=1.0f+0.75f*smooth;",self.source)
