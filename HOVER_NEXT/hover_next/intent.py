@@ -79,6 +79,16 @@ def _parse_google_search(t: str) -> Intent | None:
         if m:
             q = m.group(1)
     if q is None:
+        m = re.fullmatch(
+            r'(?:abre|abrir|muestra)\s+(?:(?:una|la|nueva)\s+)?'
+            r'(?:pestana|presencia|pagina|ventana)\s+'
+            r'(?:de|en)\s+google\s+y\s+'
+            r'(?:busca|buscar|buscame|encuentra)\s+(.+?)\s*',
+            t,
+        )
+        if m:
+            q = m.group(1)
+    if q is None:
         return None
     q = re.sub(r'^(?:informacion|datos)\s+sobre\s+', '', q).strip()
     if not 2 <= len(q) <= 180 or q in ('google', 'internet'):
@@ -88,6 +98,13 @@ def _parse_google_search(t: str) -> Intent | None:
 
 def _parse_local_creation(t: str) -> Intent | None:
     """Create a named TXT, subfolder or Excel only in HOVER's selected folder."""
+    # Whisper sometimes hears "quería un archivo y texto" for
+    # "crea un archivo de texto". Do not create anything from this
+    # uncertain phrase; ask for the name of a TXT first.
+    if re.fullmatch(
+        r'queria\s+(?:(?:un|el)\s+)?archivo\s+(?:de|y)\s+texto', t
+    ):
+        return Intent("local_name_needed", args={"kind":"txt"})
     if not re.search(r'\b(?:crea|crear|creame|cree)\b', t):
         return None
     kind = None
@@ -122,6 +139,14 @@ def parse(text: str) -> Intent:
     repo_request = _parse_private_repo_request(normalize(text))
     if repo_request is not None:
         return repo_request
+    # "crea un tropo privado en GitHub" is an uncertain ASR rendition
+    # of "crea un repo privado". It must NEVER auto-create a guessed slug.
+    # Ask for the name explicitly; the next clearly dictated name can
+    # complete the normal private-repo workflow.
+    if (re.search(r'\b(?:crea|crear|creame)\b',t)
+            and re.search(r'\btropo\s+privad[oa]\b',t)
+            and re.search(r'\b(?:github|git hub)\b',t)):
+        return Intent('repo_name_needed')
     # Preserve punctuation inside search terms (for example "C++", "C#")
     # that the wake-word normalizer intentionally drops.
     search_text = re.sub(
