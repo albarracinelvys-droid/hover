@@ -108,9 +108,13 @@ class Executor:
         action=intent.action
         provider=intent.provider
         if action == 'show_help':
-            return ('Comandos: calculadora, Word, Excel, GitHub, WhatsApp, Google, '
-                    'Drive, Gmail, Descargas, Administrador de tareas, volumen, '
-                    'musica y repositorios privados (requieren confirmacion).')
+            return ('Comandos: calculadora, Word, Excel, Google, Drive, '
+                    'crear carpetas y TXT, copiar o mover archivos, '
+                    'renombrar, agregar texto, volumen, musica, '
+                    'repositorios privados y más. Cambios requieren confirmacion.')
+        if action in ('pc_transfer','pc_rename','pc_create','pc_append'):
+            from .pc_files import perform
+            return perform(action,intent.args,self.config)
         if action == 'media_key':
             from .desktop import send_media_key
             return send_media_key(intent.args['key'])
