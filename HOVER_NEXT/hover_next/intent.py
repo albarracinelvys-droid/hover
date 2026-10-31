@@ -30,27 +30,63 @@ def identify_provider(t: str) -> str:
 
 
 def _parse_private_repo_request(t: str) -> Intent | None:
-    """Repo creation requires: explicit create verb, private intent, and name.
+    """Safely interpret voice requests for private GitHub repositories.
 
-    The spoken syntax can freely order 'privado' and 'en GitHub'.
-    Never create a public repository or guess a truncated name.
+    A known ASR substitution, 'seria uno de los requisitorios', is accepted
+    ONLY with 'privado' and an explicit name. Creation always requires
+    confirming the exact slug in the terminal; it is never automatic.
     """
-    if not re.search(r'\b(?:crea|crear|creame|creame|genera|generar)\b',t):
+    repository = r'(?:repo(?:sitorio)?s?|requisitori[oa]s?)'
+    if not re.search(r'\b' + repository + r'\b', t):
         return None
-    if not re.search(r'\b(?:repo|repositorio)\b',t):
+    if not re.search(r'\bprivad[oa]s?\b', t):
         return None
-    if not re.search(r'\bprivad[oa]\b',t):
+    creation = re.search(r'\b(?:crea|crear|creame|genera|generar)\b', t)
+    misheard_creation = re.search(
+        r'\bseria\s+uno\s+de\s+los\s+' + repository + r'\b', t)
+    if not creation and not misheard_creation:
         return None
-    m = re.search(
-        r'\b(?:que\s+se\s+llam(?:a|e)|llamad[oa]|con\s+el\s+nombre\s+de|nombre)\s+'
-        r'([a-z0-9][a-z0-9._-]{0,99}(?:\s+(?!(?:en|para|con|que|y|privado)\b)[a-z0-9][a-z0-9._-]*){0,3})'
-        r'(?=$|[\s,;!?])', t)
-    if not m:
+    marker = re.search(
+        r'\b(?:que\s+se\s+llam(?:a|e)|llamad[oa]|'
+        r'con\s+el\s+nombre\s+de|nombre(?:\s+de)?)\s+(.+)$', t)
+    if not marker:
         return Intent('repo_name_needed')
-    name = '-'.join(m.group(1).split()).strip('.-')
-    if not name or len(name)<2:
+    raw_name = marker.group(1).strip(' \t.,;!?:')
+    words = raw_name.split()
+    # Restrict to simple, short names; never silently truncate the user's name.
+    if not 1 <= len(words) <= 4:
         return Intent('repo_name_needed')
-    return Intent('create_private_repo',args={'name':name},requires_confirmation=True)
+    if any(not re.fullmatch(r'[a-z0-9][a-z0-9._-]*', word) for word in words):
+        return Intent('repo_name_needed')
+    name = '-'.join(words).strip('.-')
+    if len(name) < 2 or len(name) > 100:
+        return Intent('repo_name_needed')
+    return Intent('create_private_repo', args={'name': name},
+                  requires_confirmation=True)
+
+
+def _parse_google_search(t: str) -> Intent | None:
+    """Perform only explicit Google searches, never guess an unclear phrase."""
+    q = None
+    # "busca iPhone en Google"; "búscame portátiles por internet"
+    m = re.fullmatch(
+        r'(?:busca(?:me)?|buscar|encuentra|investiga)\s+(.+?)'
+        r'\s+(?:en|por)\s+(?:google|internet|la web)\s*', t)
+    if m:
+        q = m.group(1)
+    else:
+        # "busca en Google iPhone"; "buscar en internet protocolos USB"
+        m = re.fullmatch(
+            r'(?:busca(?:me)?|buscar|encuentra)\s+'
+            r'(?:en|por)\s+(?:google|internet|la web)\s+(.+?)\s*', t)
+        if m:
+            q = m.group(1)
+    if q is None:
+        return None
+    q = re.sub(r'^(?:informacion|datos)\s+sobre\s+', '', q).strip()
+    if not 2 <= len(q) <= 180 or q in ('google', 'internet'):
+        return Intent('search_query_needed')
+    return Intent('google_search', args={'query': q})
 
 
 def parse(text: str) -> Intent:
@@ -64,6 +100,9 @@ def parse(text: str) -> Intent:
     repo_request = _parse_private_repo_request(normalize(text))
     if repo_request is not None:
         return repo_request
+    search_request = _parse_google_search(t)
+    if search_request is not None:
+        return search_request
     # ASR inserts "Oye" even after the wake phrase: "Hover. Oye Calculadora".
     t = re.sub(r'^(?:oye|hey|eh|ok|vale)\s+(?=calculadora\b|calc\b|google\b|github\b|chatgpt\b|claude\b|spotify\b|abre\b)', '',t)
     # The simple assistant routes named apps and chat dictation before legacy tools.
