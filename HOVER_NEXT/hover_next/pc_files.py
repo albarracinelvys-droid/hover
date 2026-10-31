@@ -72,7 +72,8 @@ def _forget_last_move(folder_key: str, name: str) -> None:
 def _known_folder(name: str) -> Path:
     home = Path.home()
     names = {"desktop": "Desktop", "downloads": "Downloads",
-             "documents": "Documents"}
+             "documents": "Documents","pictures":"Pictures",
+             "videos":"Videos","music":"Music"}
     if name not in names:
         raise PCFileError("Ubicación no permitida.")
     # Windows often redirects Desktop/Documents to OneDrive. Read the
@@ -83,6 +84,8 @@ def _known_folder(name: str) -> Path:
             "desktop": "Desktop",
             "downloads": "{374DE290-123F-4565-9164-39C4925E467B}",
             "documents": "Personal",
+            "pictures": "My Pictures", "videos": "My Video",
+            "music": "My Music",
         }
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
@@ -389,6 +392,12 @@ def close_foreground_window(app: str) -> str:
 
 
 def perform(action: str, args: dict, config: dict) -> str:
+    if action == "pc_open_folder":
+        folder=location(args["location"],config)
+        if os.name!="nt":
+            raise PCFileError("Abrir carpetas requiere Windows.")
+        os.startfile(str(folder))
+        return f"Abrí la carpeta {folder} en el Explorador."
     if action == "pc_delete":
         # Only a fresh, frozen file snapshot is eligible for deletion.
         if (args.get("pick")!="name" or
