@@ -41,6 +41,10 @@ class IntentTests(unittest.TestCase):
         i=parse('adjunta archivo taller2.pdf a Claude')
         self.assertEqual(i.action,'upload_file')
         self.assertTrue(i.requires_confirmation)
+    def test_new_chat_with_prompt(self):
+        i=parse('Oye Hover, abre ChatGPT crea un nuevo chat y preguntale que es Python')
+        self.assertEqual(i.action,'new_chat_and_send')
+        self.assertTrue(i.requires_confirmation)
     def test_prompt_confirmation(self):
         i=parse('pregúntale a Claude que explique la transformada de Fourier')
         self.assertEqual(i.action,'send_prompt')
