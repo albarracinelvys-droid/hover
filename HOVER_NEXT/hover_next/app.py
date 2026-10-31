@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from .intent import parse
+from .intent import Intent, parse
 from .executor import Executor, confirm_intent, confirm_voice_intent
 from .ui_bridge import publish, status_page
 
