@@ -154,10 +154,21 @@ def _read(service):
     try:
         from google.oauth2.credentials import Credentials
         blob=_unprotect(target.read_bytes())
-        # Require the service's own scopes; never reuse another service's
-        # broader token or mistake a service for having been authorized.
+        record=json.loads(blob)
+        # Never silently promote the scopes of an OLD token by supplying
+        # desired scopes to the Credentials constructor. That only changes
+        # local metadata, not the permissions Google actually granted.
+        recorded=record.get("scopes",[])
+        granted=set(recorded.split() if isinstance(recorded,str) else recorded)
+        needed=set(SCOPES[service])
+        if not needed.issubset(granted):
+            raise GoogleAuthError(
+                f"Los permisos guardados de {service} están desactualizados. "
+                f"Autoriza de nuevo desde Atajos > Google > Conectar {service}, "
+                f"o ejecuta: python -m hover_next.google_cli --service {service}. "
+                "El token anterior no fue modificado.")
         cred=Credentials.from_authorized_user_info(
-            json.loads(blob),scopes=_requested_scopes(service))
+            record,scopes=_requested_scopes(service))
         return cred
     except (OSError,UnicodeError,ValueError,KeyError) as exc:
         raise GoogleAuthError(
@@ -260,14 +271,22 @@ def credentials(service):
     if not cred.valid:
         if not cred.refresh_token:
             raise GoogleAuthError(
-                f"Google solicitó reconectar {service}.")
+                f"No hay autorización renovable para {service}. "
+                f"Conecta de nuevo desde Atajos > Google > Conectar {service}.")
         try:
             from google.auth.transport.requests import Request
             cred.refresh(Request())
             _save(service,cred)
         except Exception as exc:
+            # invalid_grant, revoked token, access denied or account changes
+            # cannot be fixed by retrying the same stale credentials.
             raise GoogleAuthError(
-                f"No se pudo renovar {service}; vuelve a conectarlo.") from exc
+                f"Google rechazó renovar {service}. "
+                f"Abre Atajos > Google > Conectar {service} para volver a "
+                f"autorizar la cuenta con los permisos actuales. "
+                f"Alternativa: python -m hover_next.google_cli --service {service}. "
+                "No se eliminó el token previo."
+            ) from exc
     return cred
 
 

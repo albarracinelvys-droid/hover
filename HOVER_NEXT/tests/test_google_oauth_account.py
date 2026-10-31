@@ -137,6 +137,46 @@ class OAuthLocalTests(unittest.TestCase):
         auth.disconnect("drive")
         self.assertFalse(auth.connected("drive"))
 
+    def test_old_calendar_readonly_token_requires_reauthorization(self):
+        # Mimics an actual DPAPI token saved before Calendar write support.
+        import sys
+        from hover_next import google_auth
+        old={
+            "token":"TEST_ONLY","refresh_token":"TEST_ONLY",
+            "token_uri":"https://oauth2.googleapis.com/token",
+            "client_id":"TEST_ONLY","client_secret":"TEST_ONLY",
+            "scopes":["openid","email",
+                      "https://www.googleapis.com/auth/userinfo.email",
+                      "https://www.googleapis.com/auth/calendar.events.readonly"],
+        }
+        path=google_auth._token_path("calendar")
+        path.parent.mkdir(parents=True,exist_ok=True)
+        path.write_bytes(b"ciphertext-test")
+        credentials=MagicMock()
+        fake_module=MagicMock()
+        fake_module.Credentials.from_authorized_user_info.return_value=credentials
+        with patch.dict(sys.modules,{
+                 "google":MagicMock(),"google.oauth2":MagicMock(),
+                 "google.oauth2.credentials":fake_module}), \
+             patch.object(google_auth,"_unprotect",
+                          return_value=json.dumps(old).encode()):
+            with self.assertRaisesRegex(auth.GoogleAuthError,"desactualizados") as caught:
+                auth.credentials("calendar")
+        self.assertIn("Conectar calendar",str(caught.exception))
+        fake_module.Credentials.from_authorized_user_info.assert_not_called()
+        self.assertTrue(path.exists())
+
+    def test_rejected_token_refresh_shows_useful_calendar_reconnect_command(self):
+        cred=MagicMock(valid=False,refresh_token="TEST_ONLY")
+        cred.refresh.side_effect=ValueError("invalid_grant SHOULD NEVER PRINT")
+        with patch.object(auth,"_read",return_value=cred):
+            with self.assertRaises(auth.GoogleAuthError) as ctx:
+                auth.credentials("calendar")
+        message=str(ctx.exception)
+        self.assertIn("google_cli --service calendar",message)
+        self.assertNotIn("SHOULD NEVER PRINT",message)
+        self.assertIn("Conectar calendar",message)
+
     def test_only_allowlisted_service_files(self):
         with self.assertRaises(ValueError):
             auth._token_path("../token")

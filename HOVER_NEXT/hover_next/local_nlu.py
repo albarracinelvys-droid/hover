@@ -62,6 +62,8 @@ PROMPT=(
  "Para buscar en correo usa google_personal_search service=gmail; calendario "
  "service=calendar; Drive service=drive; Google Docs service=docs. "
  "Para crear eventos sin hora, deja time_phrase vacío: será TODO EL DÍA, no inventes hora. "
+ "Si el usuario no dijo un TÍTULO para el evento, usa title vacío; "
+ "NUNCA pongas 'mañana', 'hoy', 'calendario', 'evento' o la fecha como título. "
  "Para borrador de Gmail, no inventes destinatario ni asunto. "
  "NO interpretes órdenes de eliminar/borrar, apagar, enviar email, instalar software, "
  "ejecutar programas/comandos desconocidos, modificar registro, buscar datos sensibles "
@@ -180,12 +182,25 @@ def validate(output,spoken):
     if action=="google_create_event":
         title,date=output.get("title",""),output.get("date_phrase","")
         hour=output.get("time_phrase","")
-        if not anchored(title,spoken) or not anchored(date,spoken):
+        if not anchored(date,spoken) or len(date)>100:
             return None
         if hour and not anchored(hour,spoken):
             return None
-        if len(title)>120 or len(date)>100:
-            return None
+        # A source-grounded title must be independent of the date. The
+        # actual Windows transcript was "crea un evento ... para mañana"
+        # and Qwen wrongly set title="manana". Never create that event.
+        generic={"evento","calendario","calendar","cita","recordatorio",
+                 "hoy","manana","pasado manana","proximo dia"}
+        clean_title=clean(title)
+        clean_date=clean(date)
+        missing=(not title or clean_title in generic or
+                 clean_title==clean_date or
+                 not anchored(title,spoken) or len(title)>120)
+        if missing:
+            if "evento" not in clean(spoken) and "calendario" not in clean(spoken):
+                return None
+            return Intent("google_event_title_needed",
+                          args={"date_phrase":date,"time_phrase":hour})
         return Intent(action,args={
             "title":title,"date_phrase":date,"time_phrase":hour})
     if action=="gmail_create_draft":

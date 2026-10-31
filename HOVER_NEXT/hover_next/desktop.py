@@ -153,7 +153,12 @@ def open_windows_app(app: str) -> str:
         if not executable:
             raise ActionUnavailable(
                 "No encontré Visual Studio Code instalado para este usuario.")
-        subprocess.Popen([executable],shell=False)
+        # VS Code's Electron/Node stdout and stderr must not inherit HOVER's
+        # microphone console. Otherwise startup warnings swamp ASR logs.
+        subprocess.Popen([executable],shell=False,
+                         stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
         return "Solicité abrir Visual Studio Code."
     if app == "settings":
         os.startfile("ms-settings:")

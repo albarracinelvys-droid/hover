@@ -37,7 +37,9 @@ def voice_may_autocreate_private_repo(command, intent) -> bool:
 
 
 def run_one(command, executor, *, voice_mode=False):
-    intent = parse(command)
+    # Voice follow-ups may supply a prevalidated Intent for a missing slot.
+    # Do not reinterpret a title through the model and lose the date.
+    intent = command if isinstance(command,Intent) else parse(command)
     print("Interpretado:", intent, flush=True)
     if intent.action == "unknown":
         publish("error", "No pude interpretar esa instruccion")

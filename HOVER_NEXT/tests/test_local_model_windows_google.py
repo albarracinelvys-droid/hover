@@ -117,6 +117,107 @@ class StructuredNLUTests(unittest.TestCase):
             "abre imágenes"))
 
 
+class MissingEventTitleTests(unittest.TestCase):
+    def setUp(self):
+        local_nlu._CACHE.clear()
+        local_nlu._MISSING_UNTIL=0.0
+
+    def test_whisper_date_never_becomes_title(self):
+        sentence="crea un evento en el calendario para mañana"
+        for title in ("manana","mañana","","calendario","evento"):
+            with self.subTest(title=title):
+                result=local_nlu.validate({
+                    "action":"google_create_event",
+                    "title":title,"date_phrase":"mañana",
+                    "time_phrase":""},sentence)
+                self.assertIsNotNone(result)
+                self.assertEqual(result.action,"google_event_title_needed")
+                self.assertEqual(result.args,{
+                    "date_phrase":"mañana","time_phrase":""})
+
+    def test_event_with_clear_real_title_is_allowed(self):
+        spoken="crea un evento para mañana que diga reunión de mantenimiento"
+        got=local_nlu.validate({
+            "action":"google_create_event",
+            "title":"reunión de mantenimiento",
+            "date_phrase":"mañana"},spoken)
+        self.assertEqual(got.action,"google_create_event")
+        self.assertEqual(got.args["title"],"reunión de mantenimiento")
+
+    def test_handsfree_dialogue_asks_title_then_creates_exact_event(self):
+        from hover_next.voice_coucou import VoiceDialogue
+        actions=[]
+        now=[100.0]
+        missing=Intent("google_event_title_needed",args={
+            "date_phrase":"mañana","time_phrase":""})
+        dialogue=VoiceDialogue(
+            lambda intent: actions.append(intent) or "Evento creado",
+            lambda *a:None,clock=lambda:now[0])
+        with patch("hover_next.local_nlu.model_intent",
+                   return_value=missing), \
+             patch("hover_next.voice_coucou.publish"):
+            status=dialogue.process(
+                "Oye Hover, crea un evento en el calendario para mañana.")
+            self.assertEqual(status,"waiting")
+            self.assertFalse(actions)
+            self.assertIsNotNone(dialogue.pending_event)
+            status=dialogue.process("Reunión de mantenimiento")
+        self.assertEqual(status,"action")
+        self.assertEqual(len(actions),1)
+        self.assertEqual(actions[0].action,"google_create_event")
+        self.assertEqual(actions[0].args,{
+            "title":"Reunión de mantenimiento",
+            "date_phrase":"mañana","time_phrase":""})
+
+    def test_cancel_and_expire_never_write_events(self):
+        from hover_next.voice_coucou import VoiceDialogue
+        actions=[]
+        now=[100.0]
+        dialogue=VoiceDialogue(
+            lambda intent: actions.append(intent) or "Evento creado",
+            lambda *a:None,clock=lambda:now[0])
+        with patch("hover_next.voice_coucou.publish"):
+            dialogue._ask_event_title(Intent("google_event_title_needed",args={
+                "date_phrase":"mañana","time_phrase":""}))
+            self.assertEqual(dialogue.process("Cancela"),"cancel")
+            self.assertFalse(actions)
+            dialogue._ask_event_title(Intent("google_event_title_needed",args={
+                "date_phrase":"mañana","time_phrase":""}))
+            now[0]=146.0
+            self.assertEqual(dialogue.process("Reunión"),"cancel")
+            self.assertFalse(actions)
+
+    def test_direct_structured_intent_skips_model_reinterpretation(self):
+        from hover_next.app import run_one
+        executor=MagicMock()
+        executor.execute.return_value="Evento creado"
+        intent=Intent("google_create_event",args={
+            "title":"Reunión","date_phrase":"mañana","time_phrase":""})
+        with patch("hover_next.app.parse") as parser, \
+             patch("hover_next.app.publish"):
+            out=run_one(intent,executor,voice_mode=True)
+        self.assertEqual(out,"Evento creado")
+        parser.assert_not_called()
+        executor.execute.assert_called_once_with(intent,confirmed=True)
+
+
+class VSCodeLogIsolationTests(unittest.TestCase):
+    def test_gui_launch_does_not_send_node_warnings_to_hover_console(self):
+        from hover_next import desktop
+        from subprocess import DEVNULL
+        with patch("shutil.which",return_value="C:/Mock/Code.exe"), \
+             patch("hover_next.desktop.sys.platform","win32"), \
+             patch("hover_next.desktop.os.path.isfile",return_value=True), \
+             patch("hover_next.desktop.subprocess.Popen") as launch:
+            message=desktop.open_windows_app("vscode")
+        self.assertIn("Visual Studio Code",message)
+        settings=launch.call_args.kwargs
+        self.assertEqual(settings["stdout"],DEVNULL)
+        self.assertEqual(settings["stderr"],DEVNULL)
+        self.assertEqual(settings["stdin"],DEVNULL)
+        self.assertFalse(settings["shell"])
+
+
 class GoogleCalendarDraftTests(unittest.TestCase):
     def test_calendar_creates_tomorrow_all_day_with_exclusive_end(self):
         tz=ZoneInfo("America/Bogota")

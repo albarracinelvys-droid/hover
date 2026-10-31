@@ -157,6 +157,8 @@ class Executor:
             return "Google: " + ", ".join(
                 f"{k}={'conectado' if v else 'sin conectar'}"
                 for k,v in state.items())
+        if action == 'google_event_title_needed':
+            return "Falta el título del evento. Dime cómo se llamará."
         if action == 'google_create_event':
             from .google_workspace import calendar_create_event
             return calendar_create_event(

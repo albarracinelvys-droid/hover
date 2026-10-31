@@ -37,6 +37,8 @@ class VoiceDialogue:
         self.pending_kind = ""
         self.pending_until = 0.0
         self.pending_pc_location = ""
+        self.pending_event = None
+        self.pending_event_until = 0.0
         self.recent_until = 0.0
         self.recent_action = ""
 
@@ -91,6 +93,52 @@ class VoiceDialogue:
         print("[dialogo] Nombre dictado:",name,"| Acción:",kind,flush=True)
         return self._command(command)
 
+    def _ask_event_title(self, intent):
+        # A generic date like 'mañana' is never a title. Preserve the
+        # parsed date and ask for a *separate* name without another wake word.
+        self.pending_event=dict(intent.args)
+        self.pending_event_until=self.clock()+45.0
+        message="¿Cómo se llamará el evento? Di solo el título."
+        print("[calendar]",message,flush=True)
+        publish("listening",message,3)
+
+    def _finish_event_title(self, spoken):
+        import re
+        from .wake import normalize_speech
+        from .information_queries import remove_wake_preserving_text
+        raw=remove_wake_preserving_text(spoken)
+        title=(raw if raw is not None else spoken).strip(" .,!?:¿¡")
+        title=re.sub(
+            r"^(?:que se llame|que diga|ll[aá]malo|t[ií]tulo)\\s+",
+            "",title,flags=re.IGNORECASE).strip()
+        normalized=normalize_speech(title)
+        if normalized in ("cancela","cancelar","no","olvidalo","cancelalo"):
+            self.pending_event=None
+            publish("ok","Evento cancelado; no creé nada.",3)
+            print("[calendar] Cancelado por voz.",flush=True)
+            return "cancel"
+        if (not 2<=len(title)<=120 or
+                normalized in ("hover","oye","si","hoy","manana","calendario","evento")
+                or re.match(r"^(?:abre|cierra|elimina|borra|apaga|ejecuta|instala)\\b",
+                            normalized)):
+            publish("listening","Repite solo el título del evento.",3)
+            return "waiting"
+        details=self.pending_event
+        self.pending_event=None
+        if not details:
+            return "failed"
+        final=Intent("google_create_event",args={
+            "title":title,
+            "date_phrase":details["date_phrase"],
+            "time_phrase":details.get("time_phrase","")})
+        print("[calendar] Título dictado:",title,flush=True)
+        result=self.execute(final)
+        if result is None:
+            return "failed"
+        self.recent_action="google_create_event"
+        self.recent_until=self.clock()+45.0
+        return "action"
+
     def process(self, spoken: str):
         spoken=spoken.strip()
         if not spoken:
@@ -100,6 +148,17 @@ class VoiceDialogue:
         from .wake import normalize_speech
         normalized=normalize_speech(spoken)
         remainder=extract_wake(spoken)
+        if self.pending_event is not None:
+            if now>=self.pending_event_until:
+                self.pending_event=None
+                publish("ok","Solicitud de evento vencida. No se creó nada.",3)
+                return "cancel"
+            # Follow-up can have "Hover" or not. The title is not fed
+            # through the LLM as a new command.
+            if remainder != "" and normalized not in ("hover","oye hover"):
+                return self._finish_event_title(spoken)
+            publish("listening","Dime solo el título del evento.",3)
+            return "waiting"
         if self.pending_kind and now>=self.pending_until:
             self.pending_kind=""
         if self.dictation_provider and now>=self.dictation_until:
@@ -193,6 +252,9 @@ class VoiceDialogue:
             print("[accion] Sin coincidencia:",utterance,flush=True)
             return "unknown"
         print("[accion]",command.action,command.args,flush=True)
+        if command.action=="google_event_title_needed":
+            self._ask_event_title(command)
+            return "waiting"
         # The ASR sometimes says "que ya me" or "que llame" for a repo name.
         # Do not create a possibly misnamed repo. Ask for the name alone.
         from .wake import normalize_speech
