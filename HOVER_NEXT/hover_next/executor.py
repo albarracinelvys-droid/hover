@@ -114,8 +114,65 @@ class Executor:
         if action == 'media_key':
             from .desktop import send_media_key
             return send_media_key(intent.args['key'])
+        if action == 'google_connect':
+            from .google_ipc import execute_control
+            return execute_control("connect",intent.args.get("service","all"))
+        if action == 'google_disconnect':
+            from .google_ipc import execute_control
+            return execute_control("disconnect",intent.args.get("service","all"))
+        if action == 'google_status':
+            from .google_auth import status
+            state=status()
+            return "Google: " + ", ".join(
+                f"{k}={'conectado' if v else 'sin conectar'}"
+                for k,v in state.items())
+        if action == 'google_personal_search':
+            from .google_workspace import search_all,format_results
+            source=intent.args.get("source","all")
+            keys=None if source=="all" else ("drive",) if source=="docs" else (source,)
+            found,errors=search_all(intent.args["query"],keys)
+            result=format_results(found)
+            print("[google-cuenta]",result,flush=True)
+            if errors:
+                print("[google-cuenta] Advertencias: "+"; ".join(errors),flush=True)
+            if found and found[0].url:
+                from .desktop import webbrowser
+                webbrowser.open_new_tab(found[0].url)
+            return (f"En tu cuenta Google: {len(found)} resultados. "
+                    +"Primero: "+found[0].title[:60] if found else result)
+        if action == 'google_create_doc':
+            from .google_workspace import docs_create
+            from .desktop import webbrowser
+            doc=docs_create(intent.args["title"])
+            webbrowser.open_new_tab(doc.url)
+            return "Documento creado en tu Google: "+doc.title
+        if action == 'google_share_ai':
+            from .google_workspace import search_all,format_results
+            source=intent.args.get("source","all")
+            keys=None if source=="all" else ("drive",) if source=="docs" else (source,)
+            found,errors=search_all(intent.args["query"],keys)
+            if not found:
+                return "No encontré contenido de Google para compartir."
+            target=intent.args["provider"]
+            if target not in ("chatgpt","claude"):
+                raise ValueError("Destino AI inválido.")
+            text=format_results(found,max_chars=1400)
+            self.browser.prepare_chat(target)
+            result=self.browser.send_prepared(target,text)
+            return ("Compartí los metadatos seleccionados de tu cuenta Google "
+                    f"con {target}. {result}")
         if action == 'google_search':
             from .desktop import search_google
+            # User opted in: consult linked Google account first, locally.
+            # Public Google search still opens in the default browser.
+            from .google_auth import status
+            if any(status().values()):
+                    try:
+                        from .google_workspace import search_all
+                        personal,errors=search_all(intent.args["query"])
+                        print(f"[google-cuenta] Coincidencias de mi cuenta: {len(personal)}",flush=True)
+                    except Exception as exc:
+                        print("[google-cuenta] Consulta privada no disponible:",type(exc).__name__,flush=True)
             return search_google(intent.args['query'])
         if action == 'google_translate':
             from .desktop import translate_google
