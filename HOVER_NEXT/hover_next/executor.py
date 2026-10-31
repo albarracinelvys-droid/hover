@@ -56,6 +56,34 @@ class Executor:
             return 'Accion pendiente de confirmacion. No se ejecuto.'
         action=intent.action
         provider=intent.provider
+        if action == "windows_app":
+            from .desktop import open_windows_app
+            return open_windows_app(intent.args["app"])
+        if action == "office_new":
+            from .desktop import new_office_document
+            return new_office_document(intent.args["kind"])
+        if action == "open_document":
+            from .desktop import open_document
+            return open_document(intent.args.get("name", ""))
+        if action == "google_app":
+            from .desktop import open_google
+            return open_google(intent.args["service"])
+        if action in ("chat_prepare", "chat_compose"):
+            project = intent.args.get("project", "").casefold()
+            project_url = ""
+            if project:
+                project_url = self.config.get("projects", {}).get(provider, {}).get(project, "")
+                if not project_url:
+                    raise ValueError(
+                        f"Configura primero la URL real del proyecto {project} de {provider}. "
+                        "No abrí un chat general por error."
+                    )
+            result = self.browser.prepare_chat(provider, project_url)
+            if action == "chat_compose":
+                result = self.browser.send_prepared(provider, intent.args.get("prompt", ""))
+            return result
+        if action == "chat_send_prepared":
+            return self.browser.send_prepared(provider, intent.args.get("prompt", ""))
         if action in ('agent_ask','agent_task'):
             from .agent import run_agent
             return run_agent(intent.args.get('prompt',''),self.config,write=action=='agent_task')
