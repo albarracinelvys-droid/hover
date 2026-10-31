@@ -24,7 +24,7 @@ def _clean(t):
         r"^(?:quiero|necesito)\s+que\s+(?:me\s+)?"
         r"(?:crees|creas|hagas|generes|prepares)\s+",
         "crea ",t)
-    t=re.sub(r"^(?:hazme|haceme|preparame|construye)\s+","crea ",t)
+    t=re.sub(r"^(?:hazme|haceme|preparame|prepara|construye)\s+","crea ",t)
     t=re.sub(
         r"^(?:me\s+)?(?:puedes|podrias)\s+"
         r"(?:hacer|crear|preparar)\s+",
