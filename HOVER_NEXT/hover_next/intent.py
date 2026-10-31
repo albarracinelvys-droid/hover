@@ -30,35 +30,42 @@ def identify_provider(t: str) -> str:
 
 
 def _parse_private_repo_request(t: str) -> Intent | None:
-    """Safely interpret voice requests for private GitHub repositories.
+    """Parse private repo creation without treating 'en privado' as its name.
 
-    ASR variants are parsed conservatively. Voice commands with a clear
-    creation verb may be auto-authorized by the voice-only policy; vague
-    transcriptions still require confirmation or are rejected.
+    The voice auto-create policy separately requires an explicit create verb.
+    Unclear ASR variants can be parsed for assisted confirmation, never
+    silently auto-approved.
     """
     repository = r'(?:repo(?:sitorio)?s?|requisitori[oa]s?)'
     if not re.search(r'\b' + repository + r'\b', t):
         return None
     if not re.search(r'\bprivad[oa]s?\b', t):
         return None
-    creation = re.search(r'\b(?:crea|crear|creame|genera|generar)\b', t)
+    creation = re.search(r'\b(?:crea|crear|creame|genera|generar)\b',t)
     misheard_creation = re.search(
-        r'\bseria\s+uno\s+de\s+los\s+' + repository + r'\b', t)
+        r'\bseria\s+uno\s+de\s+los\s+' + repository + r'\b',t)
     if not creation and not misheard_creation:
         return None
     marker = re.search(
         r'\b(?:que\s+se\s+llam(?:a|e)|llamad[oa]|'
-        r'con\s+el\s+nombre\s+de|nombre(?:\s+de)?)\s*[,;:]?\s+(.+)
+        r'con\s+el\s+nombre\s+de|nombre(?:\s+de)?)'
+        r'\s*[,;:]?\s+(.+)$',t)
+    if not marker:
+        return Intent('repo_name_needed')
+    raw_name = marker.group(1).strip(' \t.,;!?:')
+    # A trailing privacy phrase is metadata, not part of the repository slug.
+    raw_name = re.sub(
+        r'\s+(?:en\s+privad[oa]|de\s+forma\s+privad[oa]|'
+        r'como\s+privad[oa]|privad[oa])$', '', raw_name).strip()
     words = raw_name.split()
-    # Restrict to simple, short names; never silently truncate the user's name.
     if not 1 <= len(words) <= 4:
         return Intent('repo_name_needed')
-    if any(not re.fullmatch(r'[a-z0-9][a-z0-9._-]*', word) for word in words):
+    if any(not re.fullmatch(r'[a-z0-9][a-z0-9._-]*',w) for w in words):
         return Intent('repo_name_needed')
-    name = '-'.join(words).strip('.-')
-    if len(name) < 2 or len(name) > 100:
+    name='-'.join(words).strip('.-')
+    if not 2 <= len(name) <= 80:
         return Intent('repo_name_needed')
-    return Intent('create_private_repo', args={'name': name},
+    return Intent('create_private_repo',args={'name':name},
                   requires_confirmation=True)
 
 
