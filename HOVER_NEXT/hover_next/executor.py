@@ -136,7 +136,7 @@ class Executor:
                     'crear carpetas y TXT, copiar o mover archivos, '
                     'renombrar, agregar texto, volumen, musica, '
                     'repositorios privados y más. Cambios requieren confirmacion.')
-        if action in ('pc_transfer','pc_rename','pc_create','pc_append','pc_delete','pc_close_window'):
+        if action in ('pc_transfer','pc_rename','pc_create','pc_append','pc_delete','pc_close_window','pc_open_folder'):
             from .pc_files import perform
             return perform(action,intent.args,self.config)
         if action == 'pc_shutdown':
@@ -157,6 +157,17 @@ class Executor:
             return "Google: " + ", ".join(
                 f"{k}={'conectado' if v else 'sin conectar'}"
                 for k,v in state.items())
+        if action == 'google_create_event':
+            from .google_workspace import calendar_create_event
+            return calendar_create_event(
+                intent.args["title"],intent.args["date_phrase"],
+                intent.args.get("time_phrase",""),
+                timezone_name=self.config.get("timezone","America/Bogota"))
+        if action == 'gmail_create_draft':
+            from .google_workspace import gmail_create_draft
+            return gmail_create_draft(
+                intent.args["subject"],intent.args.get("body",""),
+                intent.args.get("recipient",""))
         if action == 'google_personal_search':
             from .google_workspace import search_all,format_results
             source=intent.args.get("source","all")

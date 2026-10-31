@@ -142,6 +142,86 @@ def docs_create(title):
                 f"https://docs.google.com/document/d/{docid}/edit")
 
 
+def calendar_create_event(title, date_phrase, time_phrase="", *,
+                          timezone_name="America/Bogota", now=None):
+    """Create one event at a parsed local date; without hour, ALL DAY.
+
+    No attendee invitations, recurrence, fuzzy dates or invented time zones.
+    """
+    from zoneinfo import ZoneInfo
+    from dateparser import parse as parse_date
+    from datetime import date as date_type
+    title=" ".join(str(title).split())
+    date_phrase=" ".join(str(date_phrase).split())
+    time_phrase=" ".join(str(time_phrase).split())
+    if not 2<=len(title)<=120 or not 2<=len(date_phrase)<=100:
+        raise ValueError("El evento necesita un título y una fecha.")
+    try:
+        zone=ZoneInfo(timezone_name)
+    except (ValueError,KeyError) as exc:
+        raise ValueError("La zona horaria configurada no es válida.") from exc
+    local_now=now or datetime.now(zone)
+    parsed=parse_date(
+        date_phrase+(" "+time_phrase if time_phrase else ""),
+        languages=["es"],
+        settings={"RELATIVE_BASE":local_now,
+                  "PREFER_DATES_FROM":"future",
+                  "TIMEZONE":timezone_name,
+                  "RETURN_AS_TIMEZONE_AWARE":True})
+    if parsed is None:
+        raise ValueError("No entendí la fecha del evento. Indica una fecha clara.")
+    parsed=parsed.astimezone(zone)
+    if parsed.date()<local_now.date() or parsed.date()>(local_now+timedelta(days=366)).date():
+        raise ValueError("La fecha está fuera del intervalo permitido.")
+    if not time_phrase:
+        day=parsed.date()
+        body={"summary":title,
+              "start":{"date":day.isoformat()},
+              "end":{"date":(day+timedelta(days=1)).isoformat()}}
+    else:
+        if parsed<=local_now or parsed>(local_now+timedelta(days=366)):
+            raise ValueError("El evento debe tener hora futura.")
+        body={"summary":title,
+              "start":{"dateTime":parsed.isoformat(),"timeZone":timezone_name},
+              "end":{"dateTime":(parsed+timedelta(hours=1)).isoformat(),
+                     "timeZone":timezone_name}}
+    api=_service("calendar","calendar","v3")
+    created=api.events().insert(calendarId="primary",body=body,
+                                sendUpdates="none").execute()
+    if not isinstance(created,dict) or not created.get("id"):
+        raise RuntimeError("Google no confirmó que el evento se haya creado.")
+    return f"Evento {title} creado en Calendar para {parsed.date().isoformat()}"+(
+        " (todo el día)." if not time_phrase else f" a las {parsed.strftime('%H:%M')}.")
+
+
+def gmail_create_draft(subject, body="", recipient=""):
+    """Create a draft, NEVER send the message or infer recipient addresses."""
+    import base64
+    from email.message import EmailMessage
+    subject=" ".join(str(subject).split())
+    body=str(body)
+    recipient=str(recipient).strip()
+    if not 2<=len(subject)<=150 or "\r" in subject or "\n" in subject:
+        raise ValueError("El borrador requiere un asunto claro.")
+    if len(body)>2000:
+        raise ValueError("El cuerpo del mensaje es demasiado largo.")
+    if recipient and not re.fullmatch(
+            r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",recipient):
+        raise ValueError("El destinatario debe tener una dirección de correo válida.")
+    message=EmailMessage()
+    if recipient:
+        message["To"]=recipient
+    message["Subject"]=subject
+    message.set_content(body)
+    encoded=base64.urlsafe_b64encode(message.as_bytes()).decode("ascii")
+    api=_service("gmail","gmail","v1")
+    response=api.users().drafts().create(
+        userId="me",body={"message":{"raw":encoded}}).execute()
+    if not isinstance(response,dict) or not response.get("id"):
+        raise RuntimeError("Google no confirmó la creación del borrador.")
+    return f"Borrador guardado en Gmail: {subject}. No se envió ningún correo."
+
+
 def search_all(query,sources=None):
     """Only search services that already have local authorization."""
     _bounded_term(query)

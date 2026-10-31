@@ -22,10 +22,11 @@ SCOPES = {
         "https://www.googleapis.com/auth/drive.metadata.readonly",
     ),
     "calendar": (
-        "https://www.googleapis.com/auth/calendar.events.readonly",
+        "https://www.googleapis.com/auth/calendar.events",
     ),
     "gmail": (
         "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.compose",
     ),
     "docs": (
         "https://www.googleapis.com/auth/documents.readonly",

@@ -34,9 +34,11 @@ class OAuthLocalTests(unittest.TestCase):
     def test_isolated_minimal_google_scopes(self):
         self.assertEqual(set(auth.SERVICES),{"drive","calendar","gmail","docs"})
         self.assertIn("drive.metadata.readonly",auth.SCOPES["drive"][0])
-        self.assertEqual(len(auth.SCOPES["gmail"]),1)
-        self.assertTrue(auth.SCOPES["gmail"][0].endswith("gmail.readonly"))
-        self.assertTrue(auth.SCOPES["calendar"][0].endswith("calendar.events.readonly"))
+        self.assertEqual(set(auth.SCOPES["gmail"]),{
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/gmail.compose",
+        })
+        self.assertTrue(auth.SCOPES["calendar"][0].endswith("calendar.events"))
         self.assertTrue(any(x.endswith("drive.file") for x in auth.SCOPES["docs"]))
         self.assertNotIn("https://www.googleapis.com/auth/drive",sum(
             [list(x) for x in auth.SCOPES.values()],[]))
@@ -175,7 +177,7 @@ class OAuthLocalTests(unittest.TestCase):
         self.assertEqual(set(auth._requested_scopes("calendar")), {
             "openid", "email",
             "https://www.googleapis.com/auth/userinfo.email",
-            "https://www.googleapis.com/auth/calendar.events.readonly",
+            "https://www.googleapis.com/auth/calendar.events",
         })
 
     def test_google_oauth_asks_for_identity_aliases(self):

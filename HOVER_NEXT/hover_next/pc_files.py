@@ -72,7 +72,8 @@ def _forget_last_move(folder_key: str, name: str) -> None:
 def _known_folder(name: str) -> Path:
     home = Path.home()
     names = {"desktop": "Desktop", "downloads": "Downloads",
-             "documents": "Documents"}
+             "documents": "Documents","pictures":"Pictures",
+             "videos":"Videos","music":"Music"}
     if name not in names:
         raise PCFileError("Ubicación no permitida.")
     # Windows often redirects Desktop/Documents to OneDrive. Read the
@@ -83,6 +84,8 @@ def _known_folder(name: str) -> Path:
             "desktop": "Desktop",
             "downloads": "{374DE290-123F-4565-9164-39C4925E467B}",
             "documents": "Personal",
+            "pictures": "My Pictures", "videos": "My Video",
+            "music": "My Music",
         }
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
@@ -264,7 +267,7 @@ def _safe_window_info(win32gui, hwnd):
 def _app_window_matches(app, clazz, title):
     """Strict identity checks to avoid closing an unrelated application."""
     title=title.casefold()
-    if app in ("explorer","downloads","documents"):
+    if app in ("explorer","downloads","documents","pictures","videos","music"):
         return clazz in ("CabinetWClass","ExploreWClass")
     classes={
         "excel":("XLMAIN",),
@@ -336,8 +339,13 @@ def _specific_explorer_folder(win32gui, app, handles):
             pass
         finally:
             pythoncom.CoUninitialize()
-    labels=(("descargas","downloads") if app=="downloads"
-            else ("documentos","documents"))
+    labels={
+        "downloads":("descargas","downloads"),
+        "documents":("documentos","documents"),
+        "pictures":("imágenes","imagenes","fotos","pictures"),
+        "videos":("vídeos","videos"),
+        "music":("música","musica","music"),
+    }.get(app,())
     for hwnd in handles:
         info=_safe_window_info(win32gui,hwnd)
         if info and _app_window_matches("explorer",*info):
@@ -372,7 +380,7 @@ def close_foreground_window(app: str) -> str:
         # did not include it; still require strict app identity checks.
         if current and current not in handles:
             handles.insert(0,current)
-        if app in ("downloads","documents"):
+        if app in ("downloads","documents","pictures","videos","music"):
             hwnd=_specific_explorer_folder(win32gui,app,handles)
         else:
             candidates=[h for h in handles if
@@ -389,6 +397,12 @@ def close_foreground_window(app: str) -> str:
 
 
 def perform(action: str, args: dict, config: dict) -> str:
+    if action == "pc_open_folder":
+        folder=location(args["location"],config)
+        if os.name!="nt":
+            raise PCFileError("Abrir carpetas requiere Windows.")
+        os.startfile(str(folder))
+        return f"Abrí la carpeta {folder} en el Explorador."
     if action == "pc_delete":
         # Only a fresh, frozen file snapshot is eligible for deletion.
         if (args.get("pick")!="name" or
