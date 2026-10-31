@@ -43,7 +43,7 @@ def _parse_private_repo_request(t: str) -> Intent | None:
         return None
     m = re.search(
         r'\b(?:que\s+se\s+llam(?:a|e)|llamad[oa]|con\s+el\s+nombre\s+de|nombre)\s+'
-        r'([a-z0-9][a-z0-9._-]{1,99})\b', t)
+        r'([a-z0-9][a-z0-9._-]{1,99})(?=$|[\s,;!?])', t)
     if not m:
         return Intent('repo_name_needed')
     name = m.group(1).strip('.-')
