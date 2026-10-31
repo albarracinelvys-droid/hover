@@ -102,8 +102,16 @@ class Executor:
             webbrowser.open('spotify:')
             return 'Abri Spotify. La reproduccion necesita una sesion multimedia activa; no la he confirmado.'
         if action=='open_site':
-            self.browser.page(provider)
-            return f'Abriendo {provider}.'
+            # Simple Siri-style open: use the existing default browser and session.
+            # Playwright is reserved for composing and uploading files.
+            from .browser import URLS
+            url = URLS.get(provider)
+            if not url:
+                raise ValueError("No se reconoce el proveedor web")
+            opened = webbrowser.open_new_tab(url)
+            if not opened:
+                raise RuntimeError("Windows no pudo abrir el navegador predeterminado.")
+            return f'Abriendo {provider} en tu navegador.'
         if action=='new_chat':
             self.browser.page(provider,new=True)
             return f'Abriendo nueva conversacion en {provider}.'
