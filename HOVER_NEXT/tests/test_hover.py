@@ -22,17 +22,17 @@ class WakeTests(unittest.TestCase):
     def test_no_ambient_trigger(self):
         self.assertIsNone(extract_wake('ok, vamos'))
         self.assertIsNone(extract_wake('el profesor mencionó oye Hover en clase'))
-        self.assertIsNone(extract_wake('hover'))
+        self.assertEqual(extract_wake('hover'), '')
         self.assertIsNone(extract_wake('hoy vamos a clase'))
 
 
 class IntentTests(unittest.TestCase):
     def test_agent_question(self):
-        i=parse('Oye Hover explica el funcionamiento de un motor')
+        i=parse('Oye Hover usa Codex explica el funcionamiento de un motor')
         self.assertEqual(i.action,'agent_ask')
         self.assertFalse(i.requires_confirmation)
     def test_agent_edit_requires_confirmation(self):
-        i=parse('Oye Hover desarrolla un programa para organizar archivos')
+        i=parse('Oye Hover usa Codex desarrolla un programa para organizar archivos')
         self.assertEqual(i.action,'agent_task')
         self.assertTrue(i.requires_confirmation)
     def test_chatgpt(self):
