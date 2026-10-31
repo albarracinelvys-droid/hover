@@ -1,0 +1,190 @@
+"""HOVER Google OAuth 2.0 for an installed Windows desktop app.
+
+Tokens are encrypted with Windows DPAPI (CurrentUser), not stored as JSON.
+Each service has independent least-privilege consent and disconnect.
+Never logs credentials, authorization codes, token contents, or OAuth URLs.
+"""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+
+BASE = Path(os.environ.get("LOCALAPPDATA",str(Path.home()))) / "HOVER_NEXT"
+CLIENT = BASE / "google_oauth_client.json"  # user-supplied Desktop OAuth JSON
+TOKEN_FOLDER = BASE / "google_tokens"
+SERVICES = ("drive","calendar","gmail","docs")
+
+SCOPES = {
+    "drive": (
+        "https://www.googleapis.com/auth/drive.metadata.readonly",
+    ),
+    "calendar": (
+        "https://www.googleapis.com/auth/calendar.events.readonly",
+    ),
+    "gmail": (
+        "https://www.googleapis.com/auth/gmail.readonly",
+    ),
+    "docs": (
+        "https://www.googleapis.com/auth/documents.readonly",
+        "https://www.googleapis.com/auth/drive.file",
+    ),
+}
+IDENTITY_SCOPE = "https://www.googleapis.com/auth/userinfo.email"
+
+
+class GoogleAuthError(RuntimeError):
+    pass
+
+
+def _validate_service(service):
+    if service not in SERVICES:
+        raise ValueError("Servicio de Google no permitido.")
+    return service
+
+
+def _token_path(service):
+    return TOKEN_FOLDER / (_validate_service(service)+".dpapi")
+
+
+def _protect(plaintext: bytes) -> bytes:
+    if sys.platform != "win32":
+        raise GoogleAuthError("Los tokens Google requieren Windows DPAPI.")
+    import win32crypt
+    return win32crypt.CryptProtectData(plaintext,"HOVER Google OAuth",None,None,None,0)
+
+
+def _unprotect(ciphertext: bytes) -> bytes:
+    if sys.platform != "win32":
+        raise GoogleAuthError("Los tokens Google requieren Windows DPAPI.")
+    import win32crypt
+    return win32crypt.CryptUnprotectData(ciphertext,None,None,None,0)[1]
+
+
+def _save(service, credentials):
+    TOKEN_FOLDER.mkdir(parents=True,exist_ok=True)
+    target=_token_path(service)
+    data=_protect(credentials.to_json().encode("utf-8"))
+    # Never persist unencrypted tokens even as a temporary file.
+    with tempfile.NamedTemporaryFile(mode="wb",dir=TOKEN_FOLDER,
+                                     prefix=".oauth-",suffix=".tmp",
+                                     delete=False) as handle:
+        temp=Path(handle.name)
+        handle.write(data)
+    try:
+        os.replace(temp,target)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def _read(service):
+    target=_token_path(service)
+    if not target.is_file():
+        return None
+    try:
+        from google.oauth2.credentials import Credentials
+        blob=_unprotect(target.read_bytes())
+        # Require the service's own scopes; never reuse another service's
+        # broader token or mistake a service for having been authorized.
+        cred=Credentials.from_authorized_user_info(
+            json.loads(blob),scopes=list(SCOPES[service]) + [IDENTITY_SCOPE])
+        return cred
+    except (OSError,UnicodeError,ValueError,KeyError) as exc:
+        raise GoogleAuthError(
+            f"El token de {service} no se puede descifrar. "
+            "Desconecta ese servicio y vuelve a autorizarlo."
+        ) from exc
+
+
+def _client_path():
+    if not CLIENT.is_file():
+        raise GoogleAuthError(
+            "Falta google_oauth_client.json en %LOCALAPPDATA%\\HOVER_NEXT. "
+            "Descarga un cliente OAuth de tipo Aplicación de escritorio "
+            "desde Google Cloud y guárdalo allí; jamás en GitHub."
+        )
+    try:
+        obj=json.loads(CLIENT.read_text(encoding="utf-8"))
+        installed=obj.get("installed")
+        if not isinstance(installed,dict) or not installed.get("client_id"):
+            raise ValueError("No es una credencial OAuth tipo Desktop")
+        return CLIENT
+    except (OSError,ValueError) as exc:
+        raise GoogleAuthError("El archivo OAuth de escritorio no es válido.") from exc
+
+
+def connect(service):
+    """Open Google's local loopback consent flow. No passwords in HOVER."""
+    _validate_service(service)
+    _client_path()
+    if sys.platform!="win32":
+        raise GoogleAuthError("La conexión desde la isla se realiza en Windows.")
+    try:
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        flow=InstalledAppFlow.from_client_secrets_file(
+            str(CLIENT),scopes=list(SCOPES[service])+[IDENTITY_SCOPE])
+        # This displays the consent page in the user's browser.
+        credentials=flow.run_local_server(
+            host="127.0.0.1",port=0,open_browser=True,
+            authorization_prompt_message="Autoriza HOVER en la pestaña de Google.",
+            success_message="Google conectado con HOVER; puedes cerrar esta pestaña.",
+            access_type="offline",prompt="consent")
+        _save(service,credentials)
+        return f"{service} conectado mediante OAuth 2.0"
+    except Exception as exc:
+        if isinstance(exc,GoogleAuthError):
+            raise
+        raise GoogleAuthError(
+            f"No pude autorizar {service}. Revisa las APIs habilitadas, "
+            "los usuarios de prueba y los permisos del proyecto Google Cloud."
+        ) from exc
+
+
+def credentials(service):
+    _validate_service(service)
+    cred=_read(service)
+    if cred is None:
+        raise GoogleAuthError(
+            f"{service} no conectado. Abre Atajos > Google > Conectar {service}.")
+    if not cred.valid:
+        if not cred.refresh_token:
+            raise GoogleAuthError(
+                f"Google solicitó reconectar {service}.")
+        try:
+            from google.auth.transport.requests import Request
+            cred.refresh(Request())
+            _save(service,cred)
+        except Exception as exc:
+            raise GoogleAuthError(
+                f"No se pudo renovar {service}; vuelve a conectarlo.") from exc
+    return cred
+
+
+def connected(service):
+    return _token_path(service).is_file()
+
+
+def status():
+    return {key:connected(key) for key in SERVICES}
+
+
+def disconnect(service="all"):
+    targets=SERVICES if service=="all" else (_validate_service(service),)
+    for key in targets:
+        # Local disconnect is immediate. Remote authorization can also be
+        # revoked at https://myaccount.google.com/permissions .
+        _token_path(key).unlink(missing_ok=True)
+    return "Google desconectado localmente: "+", ".join(targets)
+
+
+def account_email(service):
+    """Fetch the address only when status UI requests it, without caching it."""
+    import requests
+    cred=credentials(service)
+    reply=requests.get(
+        "https://www.googleapis.com/oauth2/v2/userinfo",
+        headers={"Authorization":"Bearer "+cred.token},timeout=12)
+    reply.raise_for_status()
+    return str(reply.json().get("email",""))[:120]
