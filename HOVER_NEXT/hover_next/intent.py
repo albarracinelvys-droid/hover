@@ -275,4 +275,8 @@ def parse(text: str) -> Intent:
         if re.match(r'^(?:crea|crear|modifica|editar|edita|implementa|programa|desarrolla|corrige)\b',task):
             return Intent('agent_task',args={'prompt':task},requires_confirmation=True)
         return Intent('agent_ask',args={'prompt':task})
-    return Intent('unknown')
+    # Let a locally installed LLM interpret natural commands that no fixed
+    # grammar understands. Its JSON is validated before building an Intent.
+    # With no Ollama model, HOVER keeps the existing reliable rule engine.
+    from .local_nlu import model_intent
+    return model_intent(t) or Intent('unknown')
