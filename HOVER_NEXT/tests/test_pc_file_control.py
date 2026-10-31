@@ -172,6 +172,32 @@ class DeleteVoiceTests(unittest.TestCase):
         self.assertIsNone(result)
         executor.execute.assert_not_called()
 
+    def test_real_whisper_phrase_is_not_a_google_search(self):
+        for phrase in (
+            "Oye Hover, que elimina el último archivo movido al escritorio.",
+            "Hover elimina el último archivo movido al escritorio.",
+            "Hover, borra el último archivo que moviste al escritorio.",
+        ):
+            with self.subTest(phrase=phrase):
+                intent=parse(phrase)
+                self.assertEqual(intent.action,"pc_delete")
+                self.assertFalse(intent.requires_confirmation)
+                self.assertEqual(intent.args,{"pick":"last_moved",
+                                              "location":"desktop"})
+
+    def test_last_moved_without_record_fails_instead_of_deleting_latest(self):
+        from hover_next.app import run_one
+        executor=MagicMock()
+        executor.config={}
+        with patch("hover_next.pc_files.prepare_delete",
+                   side_effect=pc_files.PCFileError("No hay movimiento reciente")), \
+             patch("hover_next.app.publish"):
+            result=run_one(
+                "Oye Hover que elimina el último archivo movido al escritorio",
+                executor,voice_mode=True)
+        self.assertIsNone(result)
+        executor.execute.assert_not_called()
+
     def test_delete_grammar_recognizes_del_escritorio(self):
         for command in (
             "elimina el último archivo de escritorio",
@@ -192,6 +218,8 @@ class DeleteVoiceTests(unittest.TestCase):
 
 class FileOperations(unittest.TestCase):
     def setUp(self):
+        # Isolate the per-session last successful movement between tests.
+        pc_files._LAST_MOVED=None
         self.temp=tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         root=Path(self.temp.name)
@@ -202,6 +230,64 @@ class FileOperations(unittest.TestCase):
                    side_effect=lambda loc,config:self.dirs[loc])
         fake.start()
         self.addCleanup(fake.stop)
+
+    def test_last_moved_deletion_targets_actual_move_not_latest_file(self):
+        import sys
+        src=self.dirs["downloads"]/"archivo-real.zip"
+        src.write_bytes(b"moved by HOVER")
+        (self.dirs["desktop"]/"no-tocar.txt").write_text(
+            "personal document",encoding="utf-8")
+        args={"operation":"move","pick":"name","name":src.name,
+              "from":"downloads","to":"desktop"}
+        pc_files.perform("pc_transfer",args,{})
+        # Another file can be newer and must NOT be chosen as the target.
+        unrelated=self.dirs["desktop"]/"despues.pdf"
+        unrelated.write_text("never delete me",encoding="utf-8")
+        frozen=pc_files.prepare_delete(
+            {"pick":"last_moved","location":"desktop"},{})
+        self.assertEqual(frozen["name"],"archivo-real.zip")
+        sent=MagicMock()
+        with patch.dict(sys.modules,{"send2trash":MagicMock(send2trash=sent)}):
+            pc_files.perform("pc_delete",frozen,{})
+        sent.assert_called_once_with(
+            str(self.dirs["desktop"]/"archivo-real.zip"))
+        self.assertTrue(unrelated.exists())
+        with self.assertRaises(pc_files.PCFileError):
+            pc_files.prepare_delete(
+                {"pick":"last_moved","location":"desktop"},{})
+
+    def test_last_moved_rejects_file_modified_after_move(self):
+        moved=self.dirs["downloads"]/"movido.zip"
+        moved.write_bytes(b"version one")
+        pc_files.perform("pc_transfer",{
+            "operation":"move","pick":"name","name":"movido.zip",
+            "from":"downloads","to":"desktop"},{})
+        (self.dirs["desktop"]/"movido.zip").write_bytes(b"changed content")
+        with self.assertRaisesRegex(pc_files.PCFileError,"cambió"):
+            pc_files.prepare_delete(
+                {"pick":"last_moved","location":"desktop"},{})
+
+    def test_last_moved_rejects_wrong_folder_and_old_history(self):
+        moved=self.dirs["downloads"]/"movido.zip"
+        moved.write_bytes(b"copy")
+        pc_files.perform("pc_transfer",{
+            "operation":"move","pick":"name","name":"movido.zip",
+            "from":"downloads","to":"desktop"},{})
+        with self.assertRaises(pc_files.PCFileError):
+            pc_files.prepare_delete(
+                {"pick":"last_moved","location":"documents"},{})
+        with patch("hover_next.pc_files.time.monotonic",
+                   return_value=pc_files._LAST_MOVED["when"]+3600):
+            with self.assertRaises(pc_files.PCFileError):
+                pc_files.prepare_delete(
+                    {"pick":"last_moved","location":"desktop"},{})
+
+    def test_last_moved_is_not_inferred_after_hove_restart(self):
+        # Different sessions have no shared last-move guess.
+        (self.dirs["desktop"]/"personal.pdf").write_bytes(b"important")
+        with self.assertRaises(pc_files.PCFileError):
+            pc_files.prepare_delete(
+                {"pick":"last_moved","location":"desktop"},{})
 
     def test_move_latest_archive_ignores_newer_nonarchives(self):
         zipfile=self.dirs["downloads"]/"backup.zip"
