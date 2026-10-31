@@ -1,6 +1,6 @@
 """Local, no-network IPC between Windhawk Google buttons and HOVER Python.
 
-The UI writes fixed allowlisted commands to %LOCALAPPDATA%\HOVER_NEXT.
+The UI writes fixed allowlisted commands to %LOCALAPPDATA%/HOVER_NEXT.
 It never receives OAuth tokens or passwords. Python's voice worker handles
 consent so the 30ms mic callback never blocks on browser authorization.
 """
@@ -55,6 +55,19 @@ def execute_control(action,service):
         write_status(message)
         publish("ok",message,3)
         return message
+    # Detect missing Desktop OAuth configuration ONCE, before attempting
+    # four authorizations and printing the same vague error four times.
+    try:
+        google_auth._client_path()
+    except google_auth.GoogleAuthError:
+        message=(
+            "FALTA CLIENTE OAUTH: guarda google_oauth_client.json en "
+            "%LOCALAPPDATA%/HOVER_NEXT. Configúralo en Google Cloud "
+            "como aplicación de escritorio antes de pulsar Conectar.")
+        print("[google]",message,flush=True)
+        write_status(message)
+        publish("error","Google: falta el archivo OAuth de escritorio",3)
+        return message
     services=google_auth.SERVICES if service=="all" else (service,)
     outcomes=[]
     for key in services:
@@ -82,7 +95,7 @@ def execute_control(action,service):
                     "La cuenta Google no coincide. Elige la misma cuenta en todos los servicios.")
             outcomes.append(key+" conectado como "+new_email)
         except Exception as exc:
-            outcomes.append(f"{key}: {type(exc).__name__}. Revisa el archivo OAuth y la cuenta.")
+            outcomes.append(f"{key}: {type(exc).__name__}. Comprueba el consentimiento, los permisos y las APIs.")
         write_status(outcomes[-1])
     final="; ".join(outcomes)
     publish("ok",final[:110],3)
