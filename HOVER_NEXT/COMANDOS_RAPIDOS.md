@@ -1,3 +1,53 @@
+# HOVER — Recuperación del diálogo y Spotify
+
+La voz local sigue usando el motor que ya reconocía tus frases; no se
+cambió el diseño de Windhawk ni se reinstala Whisper.
+
+**Frases de prueba recomendadas:**
+
+- «Hover, abre calculadora».
+- «Hover, busca carros baratos en Google».
+- «Hover, crea un TXT en la carpeta favorita».
+  HOVER mostrará **«Dime solo el nombre para TXT»**. Puedes responder
+  «prueba uno» **sin repetir Hover**. No sobrescribe archivos existentes.
+- «Hover, crea un repositorio privado en GitHub».
+  HOVER pedirá el nombre en la isla. Responde «prueba uno» y continuará
+  con la creación privada autorizada por voz. Solo funciona si GitHub CLI
+  ya está instalado y autenticado.
+- Si Whisper transcribe «que ya me prueba uno» o «que llame PRA1»,
+  HOVER **no crea un repositorio posiblemente mal nombrado**: pide el
+  nombre de nuevo para que lo dictes claramente.
+- «Hover, reproduce Spotify».
+  HOVER abre Spotify y **solicita reproducir** mediante la sesión
+  multimedia de Windows si está disponible; de lo contrario envía
+  el botón multimedia reproducir/pausar. Este último es un control
+  alternante, así que no garantiza que suene una canción si Spotify no
+  tiene una pista seleccionada.
+- Tras abrir Spotify, «Reprodúcelo» funciona durante los siguientes
+  45 segundos sin repetir Hover. Si ya hay música sonando, usar el
+  control alternante podría pausarla.
+- Mientras HOVER está conversando contigo, si Whisper pierde «Hover»
+  pero entiende «Oye, crea un TXT ...», admite esa nueva instrucción
+  siempre que sea una operación segura y esté dentro de esa ventana
+  de conversación. Fuera de ella se exige «Hover» o F8.
+
+**Actualizar y probar:**
+
+```powershell
+cd C:\Users\gomez\hover
+git pull origin main
+cd .\HOVER_NEXT
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\INICIAR_HOVER.bat
+```
+
+Las pruebas no usan micrófono, cuenta GitHub ni Spotify reales.
+Solo validan la lógica y las llamadas al sistema. Para saber si
+Spotify reproduce audio efectivamente en tu equipo, hay que
+probarlo con una sesión iniciada y una lista o canción disponible.
+
+---
+
 ## Correcciones de cierre y carpeta favorita (31 de octubre de 2026)
 
 El motor de voz mantiene Whisper y los controles existentes; el navegador
