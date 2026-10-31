@@ -131,7 +131,11 @@ def anchored(value,spoken):
 
 
 def _candidate(spoken):
-    """A known action verb is required; the model cannot invent an action."""
+    """Broad request gate, not a fixed-phrase interpreter.
+
+    Conjugated verbs are delegated to Qwen, with a strict action validator.
+    Never infer high-risk actions from vaguely related speech.
+    """
     t=clean(spoken)
     if len(t)<5 or len(t)>320:
         return False
@@ -142,12 +146,12 @@ def _candidate(spoken):
                  r"powershell|cmd /|envia|enviar|manda un correo)\b",t):
         return False
     return bool(re.search(
-        r"\b(?:abre|abrir|abreme|abran|muestra|muestrame|"
-        r"cierra|cerrar|cierrame|sierra|"
-        r"crea|crear|creame|hazme|prepara|programa|agenda|anota|"
-        r"busca|buscame|revisa|encuentra|consulta|"
-        r"copia|copiar|mueve|mover|pasa|pasame|traslada|"
-        r"renombra|cambiale|agrega|escribe|redacta)\b",t))
+        r"\b(?:abr\w*|cierr\w*|cerr\w*|crea\w*|cree\w*|"
+        r"busc\w*|mostr\w*|muestr\w*|revis\w*|"
+        r"encontr\w*|consult\w*|copi\w*|mov\w*|muev\w*|"
+        r"pas\w*|traslad\w*|renombr\w*|cambi\w*|"
+        r"agreg\w*|escrib\w*|redact\w*|prepar\w*|"
+        r"program\w*|agend\w*|anot\w*|cre\w*)\b",t))
 
 
 def validate(output,spoken):
