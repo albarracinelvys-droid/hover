@@ -45,6 +45,8 @@ class SiriStyleCommandTests(unittest.TestCase):
             "Hover, crea un documento de Google":"google_docs_new",
             "Hover, crea una hoja de cálculo":"google_sheets_new",
             "Hover, abre Gmail":"google_gmail",
+            "Hover, redacta un nuevo correo en Gmail":"google_gmail_compose",
+            "Hover, crea un evento en mi calendario":"google_calendar_new",
             "Hover, abre mi calendario":"google_calendar",
             "Hover, abre Google Maps":"google_maps",
             "Hover, abre Google Meet":"google_meet",
