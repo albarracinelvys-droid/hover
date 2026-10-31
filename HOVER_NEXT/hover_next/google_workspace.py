@@ -190,6 +190,10 @@ def calendar_create_event(title, date_phrase, time_phrase="", *,
                                 sendUpdates="none").execute()
     if not isinstance(created,dict) or not created.get("id"):
         raise RuntimeError("Google no confirmó que el evento se haya creado.")
+    # Refresh the Windhawk calendar asynchronously; no extra Google call
+    # on the microphone thread.
+    from .calendar_bridge import request_refresh
+    request_refresh()
     return f"Evento {title} creado en Calendar para {parsed.date().isoformat()}"+(
         " (todo el día)." if not time_phrase else f" a las {parsed.strftime('%H:%M')}.")
 
