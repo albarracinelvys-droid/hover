@@ -1,4 +1,4 @@
-"""File operations stay scoped, with spoken confirmation for deletion."""
+"""Local files are scoped; direct deletion only sends individual files to Trash."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -109,78 +109,85 @@ class FileConfirmationFlow(unittest.TestCase):
 
 
 class DeleteVoiceTests(unittest.TestCase):
-    def make_dialogue(self):
-        from hover_next.intent import Intent
-        now=[100.]
-        confirmed=[]
-        executed=[]
-        def prepare(_):
-            return Intent("pc_delete",args={
-                "pick":"name","name":"factura.pdf","location":"downloads",
-                "size":"7","mtime_ns":"8"},requires_confirmation=True)
-        dialogue=VoiceDialogue(
-            lambda text:executed.append(text) or "success",
-            lambda *args:None,
-            clock=lambda:now[0],
-            prepare_delete=prepare,
-            execute_confirmed=lambda intent:confirmed.append(intent) or "En Papelera")
-        return dialogue,now,confirmed,executed
-
-    def test_delete_wants_confirmation_but_never_executes_immediately(self):
-        dialogue,now,confirmed,executed=self.make_dialogue()
-        self.assertEqual(dialogue.process(
-            "Oye Hover, elimina el archivo factura.pdf de descargas"),"waiting")
-        self.assertEqual(confirmed,[])
-        self.assertEqual(executed,[])
-        self.assertEqual(dialogue.pending_delete.args["name"],"factura.pdf")
-
-    def test_yes_performs_once_only(self):
-        dialogue,now,confirmed,executed=self.make_dialogue()
-        dialogue.process("Oye Hover, elimina el archivo factura.pdf de descargas")
-        self.assertEqual(dialogue.process("Sí"),"action")
-        self.assertEqual(len(confirmed),1)
-        dialogue.process("Sí")
-        self.assertEqual(len(confirmed),1)
-
-    def test_no_cancels(self):
-        dialogue,now,confirmed,executed=self.make_dialogue()
-        dialogue.process("Oye Hover, elimina el archivo factura.pdf de descargas")
-        self.assertEqual(dialogue.process("No"),"cancel")
-        self.assertFalse(confirmed)
-
-    def test_unrelated_speech_cannot_approve(self):
-        dialogue,now,confirmed,executed=self.make_dialogue()
-        dialogue.process("Oye Hover, elimina el archivo factura.pdf de descargas")
-        self.assertEqual(dialogue.process("sí por favor abre calculadora"),"waiting")
-        self.assertFalse(confirmed)
-
-    def test_timeout_does_not_execute(self):
-        dialogue,now,confirmed,executed=self.make_dialogue()
-        dialogue.process("Oye Hover, elimina el archivo factura.pdf de descargas")
-        now[0]=121
-        self.assertEqual(dialogue.process("Sí"),"cancel")
-        self.assertFalse(confirmed)
-
-    def test_delete_grammar_and_scope(self):
-        item=parse("elimina el último comprimido de descargas")
-        self.assertEqual(item.action,"pc_delete")
-        self.assertTrue(item.requires_confirmation)
-        self.assertEqual(item.args["kind"],"archive")
-        named=parse("elimina el archivo factura.pdf de descargas")
-        self.assertEqual(named.action,"pc_delete")
-        self.assertEqual(named.args["name"],"factura.pdf")
-        self.assertNotEqual(parse("elimina el directorio Windows").action,
-                            "pc_delete")
-
-    def test_direct_voice_call_cannot_bypass_yes(self):
+    def test_delete_latest_voice_runs_immediately(self):
         from hover_next.app import run_one
         executor=MagicMock()
-        with patch("hover_next.app.confirm_voice_intent") as popup, \
+        executor.config={}
+        executor.execute.return_value="Envié ejemplo.zip a la Papelera."
+        snapshot={"pick":"name","name":"ejemplo.zip",
+                  "location":"desktop","size":"123","mtime_ns":"456"}
+        with patch("hover_next.pc_files.prepare_delete",
+                   return_value=snapshot) as prepare, \
+             patch("hover_next.app.confirm_voice_intent") as popup, \
              patch("hover_next.app.publish"):
-            self.assertIsNone(run_one("elimina el archivo factura.pdf de descargas",
-                                      executor,voice_mode=True))
+            result=run_one(
+                "Hover, elimina el último archivo del escritorio.",
+                executor,voice_mode=True)
+        self.assertIn("Papelera",result)
+        prepare.assert_called_once()
         popup.assert_not_called()
+        cmd=executor.execute.call_args.args[0]
+        self.assertEqual(cmd.action,"pc_delete")
+        self.assertFalse(cmd.requires_confirmation)
+        self.assertEqual(cmd.args,snapshot)
+        executor.execute.assert_called_once_with(cmd,confirmed=True)
+
+    def test_delete_named_voice_runs_without_yes_or_no(self):
+        from hover_next.app import run_one
+        executor=MagicMock()
+        executor.config={}
+        executor.execute.return_value="Envié factura.pdf a la Papelera."
+        snapshot={"pick":"name","name":"factura.pdf",
+                  "location":"downloads","size":"7","mtime_ns":"8"}
+        with patch("hover_next.pc_files.prepare_delete",return_value=snapshot), \
+             patch("hover_next.app.confirm_voice_intent") as popup, \
+             patch("hover_next.app.publish"):
+            result=run_one(
+                "Oye Hover elimina el archivo factura.pdf de descargas",
+                executor,voice_mode=True)
+        self.assertIn("factura.pdf",result)
+        popup.assert_not_called()
+        executor.execute.assert_called_once()
+
+    def test_voice_dialogue_routes_delete_directly(self):
+        executed=[]
+        d=VoiceDialogue(lambda text:executed.append(text) or "Enviado a la Papelera",
+                        lambda *args:None,clock=lambda:100)
+        with patch("hover_next.voice_coucou.publish"):
+            self.assertEqual(
+                d.process("Hover, elimina el último archivo del escritorio."),
+                "action")
+        self.assertEqual(len(executed),1)
+        self.assertEqual(parse(executed[0]).action,"pc_delete")
+
+    def test_delete_missing_file_does_not_execute(self):
+        from hover_next.app import run_one
+        executor=MagicMock()
+        executor.config={}
+        with patch("hover_next.pc_files.prepare_delete",
+                   side_effect=pc_files.PCFileError("No existe")), \
+             patch("hover_next.app.publish"):
+            result=run_one("Hover elimina el último archivo del escritorio",
+                           executor,voice_mode=True)
+        self.assertIsNone(result)
         executor.execute.assert_not_called()
+
+    def test_delete_grammar_recognizes_del_escritorio(self):
+        for command in (
+            "elimina el último archivo de escritorio",
+            "elimina el último archivo del escritorio",
+            "eliminar el último archivo del escritorio",
+            "borra el último comprimido de descargas",
+            "elimina el archivo factura.pdf de descargas",
+        ):
+            with self.subTest(command=command):
+                intent=parse(command)
+                self.assertEqual(intent.action,"pc_delete")
+                self.assertFalse(intent.requires_confirmation)
+        self.assertNotEqual(
+            parse("elimina el directorio Windows").action,"pc_delete")
+        self.assertNotEqual(
+            parse("elimina todos los archivos del sistema").action,"pc_delete")
 
 
 class FileOperations(unittest.TestCase):
