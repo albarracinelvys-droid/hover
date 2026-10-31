@@ -37,7 +37,7 @@ def parse(text: str) -> Intent:
         return Intent('create_private_repo', args={'name': name}, requires_confirmation=True)
     if ('ultimo archivo' in t or 'ultimo fichero' in t) and 'descargas' in t and any(x in t for x in ('mueve', 'traslada', 'copia')):
         return Intent('move_latest_download' if 'mueve' in t or 'traslada' in t else 'copy_latest_download', requires_confirmation=True)
-    if any(x in t for x in ('adjunta', 'sube', 'carga archivo', 'envia el archivo')):
+    if any(x in t for x in ('adjunta', 'adjuntalo', 'adjuntala', 'sube', 'carga archivo', 'envia el archivo')):
         match = re.search(r'(?:llamado|nombre|archivo|taller)\s+([\w .-]+?)(?:\s+(?:a|en|con|y|para)\s+|$)', t)
         name = match.group(1).strip() if match else ''
         prompt = ''
@@ -53,7 +53,7 @@ def parse(text: str) -> Intent:
         m=re.search(r'(?:preguntale|pregunta a|enviale|envia este prompt|escribe a|dile a)\s+(?:a\s+)?(?:chatgpt|chat gpt|claude|cloud)?\s*(?:que|esto|lo siguiente|:)?\s*(.+)',t)
         prompt=(m.group(1) if m else '').strip(' :')
         if not prompt: return Intent('unknown')
-        return Intent('send_prompt',provider,{'prompt':prompt},requires_confirmation=True)
+        return Intent('new_chat_and_send' if re.search(r'\b(nuevo chat|nueva conversacion|crea un chat|crear chat)\b',t) else 'send_prompt',provider,{'prompt':prompt},requires_confirmation=True)
     if re.search(r'\b(nuevo chat|nueva conversacion|crea un chat|crear chat)\b',t) and provider in ('chatgpt','claude'):
         return Intent('new_chat',provider)
     if re.search(r'(?:abre|abrir|accede|entra|ingresa|visita|muestra)\b',t) and provider in ('chatgpt','claude'):
