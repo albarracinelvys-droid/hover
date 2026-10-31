@@ -138,7 +138,7 @@ std::atomic<int> g_topGap{0}, g_xOffset{0}, g_expandedOpacity{243};
 std::atomic<bool> g_24h{false}, g_hover{true}, g_showClipboard{true};
 std::atomic<bool> g_manualPupil{false};
 std::atomic<bool> g_autoOpenSpotify{false};
-std::atomic<int> g_swipeSensitivity{32};
+std::atomic<int> g_swipeSensitivity{25};
 std::atomic<bool> g_gestureDiagnostics{false};
 std::atomic<int> g_pupilR{150},g_pupilG{104},g_pupilB{255};
 std::atomic<bool> g_bridgeOnline{false};
@@ -159,7 +159,11 @@ bool g_lastWheelHorizontal=false;
 ULONGLONG g_lastGestureTick=0;
 unsigned long g_bridgeCommandSerial=0;
 bool g_drag=false;
+bool g_eyeGripDrag=false;
+bool g_eyeGripMoved=false;
 POINT g_dragOrigin{};
+int g_islandShiftX=0, g_islandShiftY=0;
+int g_grabStartShiftX=0, g_grabStartShiftY=0;
 int g_clipAttempts=0, g_monthOffset=0;
 int g_calendarSelectedDay=0,g_calendarSelectedIndex=0;
 bool g_calendarDetailsOpen=false;
@@ -440,7 +444,7 @@ void LoadSettings() {
     g_pupilG=ClampInt(Wh_GetIntSetting(L"pupilGreen"),0,255);
     g_pupilB=ClampInt(Wh_GetIntSetting(L"pupilBlue"),0,255);
     g_autoOpenSpotify=Wh_GetIntSetting(L"autoOpenSpotify")!=0;
-    g_swipeSensitivity=ClampInt(Wh_GetIntSetting(L"swipeSensitivity"),15,160);
+    g_swipeSensitivity=ClampInt(Wh_GetIntSetting(L"swipeSensitivity"),12,160);
     g_gestureDiagnostics=Wh_GetIntSetting(L"gestureDiagnostics")!=0;
 }
 
@@ -991,7 +995,10 @@ void ClockText(wchar_t (&text)[32]) {
 void DrawEyes(Graphics& g,float cx) {
     // El ojo crece aproximadamente un 40% al abrirse, sin casco ni halo.
     auto saved=g.Save();
-    const float scale=1.0f+0.42f*Clamp(g_open,0.0f,1.0f);
+    // Larger, smoothly expanding eyes (up to 75% larger in the panel).
+    const float opening=Clamp(g_open,0.0f,1.0f);
+    const float smooth=opening*opening*(3.0f-2.0f*opening);
+    const float scale=1.0f+0.75f*smooth;
     const float anchorY=23.2f;
     g.TranslateTransform(cx,anchorY);
     g.ScaleTransform(scale,scale);
@@ -2239,7 +2246,23 @@ void Animate(HWND hwnd){
     POINT mouse{};GetCursorPos(&mouse);
     RECT old{};GetWindowRect(hwnd,&old);
     bool inside=mouse.x>=old.left&&mouse.x<old.right&&mouse.y>=old.top&&mouse.y<old.bottom;
-    bool expand=g_fileDragActive || (g_hover&&inside) || nowMs<g_voiceExpandUntil;
+    // The eye-grip keeps the island expanded while it is physically dragged.
+    // Audio/voice status never causes the panel to expand by itself.
+    if(g_eyeGripDrag) {
+        if((GetAsyncKeyState(VK_LBUTTON)&0x8000)==0) {
+            g_eyeGripDrag=false;
+            g_drag=false;
+            ReleaseCapture();
+        } else {
+            const int dx=mouse.x-g_dragOrigin.x;
+            const int dy=mouse.y-g_dragOrigin.y;
+            if(std::abs(dx)>4||std::abs(dy)>4)g_eyeGripMoved=true;
+            g_islandShiftX=g_grabStartShiftX+dx;
+            g_islandShiftY=g_grabStartShiftY+dy;
+        }
+    }
+    bool expand=g_eyeGripDrag || g_fileDragActive ||
+                (g_hover&&inside) || nowMs<g_voiceExpandUntil;
     float goal=expand?1:0;
     g_openV=(g_openV+(goal-g_open)*0.20f)*0.76f;
     g_open=Clamp(g_open+g_openV,0,1);
@@ -2258,8 +2281,18 @@ void Animate(HWND hwnd){
     int w=int(baseW+(kPanelWidth-baseW)*eased+0.5f);
     int h=int(baseH+(kPanelHeight-baseH)*eased+0.5f);
     RECT screen=PrimaryBounds();
-    int x=(screen.left+screen.right-w)/2+g_xOffset;
-    int y=screen.top+g_topGap;
+    const int baseX=(screen.left+screen.right-w)/2+g_xOffset;
+    const int baseY=screen.top+g_topGap;
+    // Clamp both the mini island and the expanded panel to the monitor.
+    // Drag changes runtime offsets, not the user's Windhawk settings.
+    int x=ClampInt(baseX+g_islandShiftX,screen.left,
+                   std::max(screen.left,screen.right-w));
+    int y=ClampInt(baseY+g_islandShiftY,screen.top,
+                   std::max(screen.top,screen.bottom-h));
+    if(g_eyeGripDrag) {
+        g_islandShiftX=x-baseX;
+        g_islandShiftY=y-baseY;
+    }
     if(x!=old.left||y!=old.top||w!=old.right-old.left||h!=old.bottom-old.top)
         SetWindowPos(hwnd,HWND_TOPMOST,x,y,w,h,SWP_NOACTIVATE|SWP_NOOWNERZORDER|SWP_SHOWWINDOW);
     float targetX=Clamp((float(mouse.x)-float(x)-float(w)*0.5f)/62.0f,-1.0f,1.0f)*3.5f;
@@ -2274,7 +2307,7 @@ void Animate(HWND hwnd){
 // Los touchpads de precision emiten deltas pequenos y repetidos; se acumulan.
 // La rueda de mouse tipica envia 120 unidades y navega de inmediato.
 void HandleSwipeDelta(int rawDelta,bool horizontal) {
-    if(rawDelta==0 || g_open<0.50f)return;
+    if(rawDelta==0 || g_open<0.35f || g_eyeGripDrag)return;
     const ULONGLONG now=GetTickCount64();
     if(now-g_lastGestureTick>330ULL) {
         g_wheelAccumV=0.0f;g_wheelAccumH=0.0f;
@@ -2316,7 +2349,7 @@ LRESULT CALLBACK LowLevelWheelHook(int code,WPARAM wp,LPARAM lp) {
                e->pt.y>=bounds.top && e->pt.y<bounds.bottom) {
                 // A non-activating island doesn't receive WM_MOUSEWHEEL reliably.
                 // Forward it to our own UI thread without consuming other apps' input.
-                if(g_open>0.50f && PostMessageW(hwnd,
+                if(g_open>0.35f && !g_eyeGripDrag && PostMessageW(hwnd,
                         wp==WM_MOUSEHWHEEL?kWheelHorizontalMessage:kWheelMessage,
                         HIWORD(e->mouseData),LPARAM(e->time))) {
                     return 1; // La rueda controla HOVER, no la ventana que queda debajo.
@@ -2369,7 +2402,8 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
                         const int dy=p.y-g_lastGesturePos.y;
                         const int dx=p.x-g_lastGesturePos.x;
                         g_lastGesturePos=p;
-                        if(g_open>0.55f && (std::abs(dy)+std::abs(dx))>=2) {
+                        if(g_open>0.35f && !g_eyeGripDrag &&
+                           (std::abs(dy)+std::abs(dx))>=2) {
                             if(std::abs(dy)>=std::abs(dx))HandleSwipeDelta(-dy*3,false);
                             else HandleSwipeDelta(dx*3,true);
                         }
@@ -2402,15 +2436,34 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
             return 0;
         case WM_LBUTTONDOWN: {
             g_drag=true;
+            g_eyeGripMoved=false;
             GetCursorPos(&g_dragOrigin);
+            RECT r{};GetWindowRect(hwnd,&r);
+            // The grip is the space BETWEEN the two eyes. It is visible in
+            // both the compact island and the expanded state.
+            const float localX=float(g_dragOrigin.x-r.left);
+            const float localY=float(g_dragOrigin.y-r.top);
+            const float centerX=float(r.right-r.left)*0.5f;
+            g_eyeGripDrag=(std::abs(localX-centerX)<=16.0f &&
+                           localY>=4.0f && localY<=42.0f);
+            g_grabStartShiftX=g_islandShiftX;
+            g_grabStartShiftY=g_islandShiftY;
             SetCapture(hwnd);
             return 0;
         }
         case WM_LBUTTONUP:{
             POINT mouse{};GetCursorPos(&mouse);RECT r{};GetWindowRect(hwnd,&r);
+            const bool releasedGrip=g_eyeGripDrag;
+            const bool movedGrip=g_eyeGripMoved;
+            g_eyeGripDrag=false;
             if(g_drag) {
                 g_drag=false;
                 ReleaseCapture();
+                if(releasedGrip){
+                    // Never treat eye-grip movement as a page swipe or click.
+                    (void)movedGrip;
+                    return 0;
+                }
                 const int dx=mouse.x-g_dragOrigin.x;
                 const int dy=mouse.y-g_dragOrigin.y;
                 if(g_open>0.66f && (std::abs(dx)>45 || std::abs(dy)>45)) {
@@ -2421,11 +2474,11 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
             }
             int action=HitAction(float(mouse.x-r.left),float(mouse.y-r.top));
             if(action!=-1)Execute(hwnd,action);
-            // La isla no tiene modo fijo: al salir el mouse SIEMPRE se contrae.
             return 0;
         }
         case WM_CAPTURECHANGED:
             g_drag=false;
+            g_eyeGripDrag=false;
             return 0;
         case WM_RBUTTONUP:{
             POINT mouse{};GetCursorPos(&mouse);RECT r{};GetWindowRect(hwnd,&r);
