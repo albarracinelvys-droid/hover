@@ -18,6 +18,7 @@ class RecordedSpeechInterpretation(unittest.TestCase):
             ("Hover. Abre una pestaña de Google y busca carro.", "carro"),
             ("Oye Hover. Abre una presencia de Google y busca carros.", "carros"),
             ("Hover abre una página de Google y busca ruedas", "ruedas"),
+            ("Hover abre Google y busca carro", "carro"),
             ("Hover abre una pestaña de Google y busca C++", "c++"),
         )
         for phrase, query in cases:
