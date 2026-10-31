@@ -177,8 +177,11 @@ class Executor:
             for key in [0x53,0x10,0x5B]:user32.keybd_event(key,0,2,0)
             return 'Herramienta de recorte activada.'
         if action=='spotify_play':
-            webbrowser.open('spotify:')
-            return 'Abri Spotify. La reproduccion necesita una sesion multimedia activa; no la he confirmado.'
+            from .desktop import spotify_start_playback
+            return spotify_start_playback(open_app=True)
+        if action=='spotify_resume':
+            from .desktop import spotify_start_playback
+            return spotify_start_playback(open_app=False)
         if action=='open_site':
             # Simple Siri-style open: use the existing default browser and session.
             # Playwright is reserved for composing and uploading files.
