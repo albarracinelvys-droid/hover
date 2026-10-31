@@ -35,18 +35,13 @@ _SEARCH_PREFIX = re.compile(
 )
 
 _QUESTION_PREFIX = re.compile(
-    r"^(?:que\s+(?:es|son|significa|quiere\s+decir|pasa|ocurre|"
-    r"debo|puedo|podria|diferencia\s+hay|relacion\s+hay)|"
-    r"quien(?:es)?\b|"
-    r"cual(?:es)?\s+(?:es|son|sera|seria|tiene|tienen)|"
-    r"como(?:\s+se|\s+puedo|\s+hago|\s+funciona|\s+abrir|\s+crear|\s+)?|"
-    r"por\s+que|para\s+que|de\s+que|"
-    r"cuando|donde|a\s+donde|"
-    r"cuant[oa]s?(?:\s+|$)|"
-    r"es\s+posible|se\s+puede|puedo|puedes|podrias|"
-    r"cual\s+es\s+la\s+diferencia|"
-    r"hay\s+alguna|existe|"
-    r"en\s+que\s+se\s+diferencia)\b"
+    # Treat any naturally phrased Spanish question as read-only Google research.
+    # Only the beginning is matched, so "abre Google" / "crea un TXT" remain
+    # actions and "cómo crear un TXT" becomes an informational search.
+    r"^(?:que|quien(?:es)?|cual(?:es)?|como|por\s+que|para\s+que|"
+    r"de\s+que|en\s+que|cuando|donde|a\s+donde|"
+    r"cuant[oa]s?|puedo|puedes|podrias|deberia|"
+    r"es\s+posible|se\s+puede|hay|existe)\b"
 )
 
 _EXPLANATION_PREFIX = re.compile(
