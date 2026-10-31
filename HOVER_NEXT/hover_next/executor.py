@@ -117,6 +117,10 @@ class Executor:
         if action == 'google_search':
             from .desktop import search_google
             return search_google(intent.args['query'])
+        if action == 'google_translate':
+            from .desktop import translate_google
+            return translate_google(intent.args.get('text',''),
+                                    intent.args.get('target','en'))
         if action == 'search_query_needed':
             return 'Repite la busqueda con un termino claro. Ejemplo: Hover busca iPhone en Google.'
         if action == 'local_name_needed':
