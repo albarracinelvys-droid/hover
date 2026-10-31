@@ -1,3 +1,76 @@
+
+## MOTOR HOVER 5 — reparación del reconocimiento basada en Coucou Windows
+
+El problema visible en el registro era la transcripción de silencio/ruido
+como «¡Suscríbete!» o «Subtítulos ...» y la activación que no se encontraba.
+La versión nueva conserva HOVER sin voz ni pitidos y deja intacta la interfaz.
+
+**Se usa la arquitectura de Coucou**, no su personaje: detección de actividad
+de voz adaptable al ruido, precaptura, reconocimiento local y máquina de
+estados para «Hover», orden y dictado. El código es original para Python.
+Coucou Windows usa Parakeet v3 en sherpa-onnx; HOVER admite ese modelo
+opcional y mantiene Whisper si todavía no está instalado.
+
+### Recuperación recomendada en este PC
+
+1. Cierra con Ctrl+C todas las terminales antiguas de voz.
+2. En PowerShell:
+   \`\`\`powershell
+   cd C:\Users\gomez\hover
+   git pull origin main
+   cd .\HOVER_NEXT
+   .\REPARAR_E_INICIAR_HOVER.bat
+   \`\`\`
+3. El instalador descargará **~670 MB una sola vez** si instalas Parakeet,
+   comprobará SHA-256 y abrirá HOVER. Se usa el micrófono predeterminado o
+   el elegido en la configuración local.
+4. Di «Hover, abre calculadora». **Alternativa inmediata:** pulsa F8 y di
+   «abre calculadora»; si funciona con F8 pero no con «Hover», la ejecución
+   está bien y queda por afinar únicamente el reconocimiento de activación.
+
+Si el asistente sigue transcribiendo palabras inventadas:
+
+\`\`\`powershell
+.\COMPROBAR_MIC_Y_ELEGIR.bat
+\`\`\`
+
+Di «Hover abre calculadora» en cada una de las dos grabaciones de prueba.
+HOVER compara **Realtek 1 y Realtek 9**, muestra lo que cada uno transcribió,
+y guarda el mejor índice en
+\`%LOCALAPPDATA%\HOVER_NEXT\config.json\` siempre que la coincidencia sea
+suficiente. No guarda ni sube el audio de esas pruebas. Después ejecuta
+\`INICIAR_HOVER.bat\` normalmente.
+
+### Diferencias técnicas
+
+- La captura de audio y la transcripción trabajan en **hilos separados**.
+  Un procesamiento pesado no bloquea la lectura del micrófono.
+- **VAD adaptativo**: 30 ms por bloque, 360 ms de precaptura, mínimo 300 ms
+  de voz, 750 ms de silencio para terminar frase; filtra impulsos cortos.
+- **Ganancia moderada**: compensa volumen bajo sin amplificar silencios
+  ilimitadamente.
+- **Parakeet TDT 0.6B v3 int8**: pesos oficiales del repositorio referenciado
+  por Coucou, revisión fijada y verificación SHA-256 de los cuatro archivos.
+- **Whisper Small** sigue disponible como respaldo.
+- **F8** permite pedir una orden sin pronunciar «Hover», útil para diagnosticar.
+- La consola muestra \`[voz]\`, \`[accion]\`, \`[asr]\` y \`[mic]\` cuando sea
+  pertinente. El estado se informa visualmente mediante la isla.
+- La gestión de proyectos desde Atajos sigue funcionando como antes.
+
+### Límites
+
+El modelo Parakeet no está incluido en GitHub por su tamaño y debe descargarse
+en el computador. Todavía no tenemos una prueba de ejecución sobre el micrófono
+Realtek ni sobre el navegador real; las pruebas CI son de lógica y de audio
+sintético. Si la calidad del dispositivo es insuficiente, la selección guiada
+de micrófono será necesaria. Por seguridad, el dictado no autoriza eliminar
+archivos, enviar correos ni modificar repositorios sin las confirmaciones
+existentes.
+
+Referencia: https://github.com/Louis-CFM/coucou — directorios
+\`windows/src-tauri/src/speech/\` y \`windows/src-tauri/src/voice/\`.
+
+---
 # HOVER — asistente personal silencioso para Windows
 
 HOVER es una isla Windhawk con ojos y atajos. Permite usar tu voz para abrir
