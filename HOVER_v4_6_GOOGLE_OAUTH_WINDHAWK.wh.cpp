@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id hover-island-v38-hardware
-// @name HOVER v4.9 - Gestos y arrastre de isla
+// @name HOVER v4.9.1 - Arrastre real desde los ojos
 // @description Calendario interactivo con eventos de Google, detalles por día y enlaces, vía motor Python local.
-// @version 4.9.0
+// @version 4.9.1
 // @author HOVER - version de prueba
 // @include explorer.exe
 // @architecture x86-64
@@ -122,6 +122,8 @@ constexpr UINT kWheelMessage = WM_APP+22;
 constexpr UINT kWheelHorizontalMessage = WM_APP+24;
 constexpr UINT kFilesCopiedMessage = WM_APP+25;
 constexpr UINT kArrowNavigation = WM_APP+26;
+constexpr UINT kEyeGripBegin = WM_APP+27;
+constexpr UINT kEyeGripEnd = WM_APP+28;
 constexpr int kBuiltInPages = 5;
 constexpr int kMaxVoiceTabs = 5;
 constexpr float kContentLift=31.0f;
@@ -162,6 +164,9 @@ unsigned long g_bridgeCommandSerial=0;
 bool g_drag=false;
 bool g_eyeGripDrag=false;
 bool g_eyeGripMoved=false;
+// The LL mouse hook catches the click even when per-pixel transparency stops
+// the non-activating layered window from receiving WM_LBUTTONDOWN.
+std::atomic<bool> g_hookGripActive{false};
 POINT g_dragOrigin{};
 int g_islandShiftX=0, g_islandShiftY=0;
 int g_grabStartShiftX=0, g_grabStartShiftY=0;
@@ -1033,7 +1038,7 @@ void ClockText(wchar_t (&text)[32]) {
 // Dos ojos (sin cara ni aureola): parte blanca e iris del acento de Windows.
 // El globo ocular se desplaza un poco y el iris se desplaza mas, sin salirse.
 void DrawEyes(Graphics& g,float cx) {
-    // El ojo crece aproximadamente un 40% al abrirse, sin casco ni halo.
+    // Eyes are a little closer while preserving the original look and blink.
     auto saved=g.Save();
     // Larger, smoothly expanding eyes (up to 75% larger in the panel).
     const float opening=Clamp(g_open,0.0f,1.0f);
@@ -1052,7 +1057,7 @@ void DrawEyes(Graphics& g,float cx) {
     if(phase<195.0f) blink=1.0f-0.94f*std::sin(3.14159265f*phase/195.0f);
     const float cy=23.2f;
     for(int i=0;i<2;i++) {
-        const float eyeCenter=cx+(i==0?-16.4f:16.4f);
+        const float eyeCenter=cx+(i==0?-14.2f:14.2f);
         const float ex=eyeCenter+g_eyeX*0.30f;
         const float ey=cy+g_eyeY*0.27f;
         const float breathing=voiceListening?
@@ -2238,6 +2243,51 @@ RECT PrimaryBounds(){
     if(GetMonitorInfoW(monitor,&mi))return mi.rcMonitor;
     return RECT{0,0,GetSystemMetrics(SM_CXSCREEN),GetSystemMetrics(SM_CYSCREEN)};
 }
+// Eye-center drag needs a route independent of normal WM_LBUTTONDOWN:
+// UpdateLayeredWindow with a transparent frame and WS_EX_NOACTIVATE can cause
+// Windows to route clicks to the window behind the visible island.
+bool IsEyeGripScreenPoint(HWND hwnd,const POINT& point) {
+    RECT bounds{};
+    if(!hwnd || !IsWindow(hwnd) || !IsWindowVisible(hwnd) ||
+       !GetWindowRect(hwnd,&bounds))return false;
+    const int middle=(bounds.left+bounds.right)/2;
+    // Deliberately generous: covers the dark strip and inner sides of eyes.
+    // It does not cover calendar/music buttons or the window below.
+    return std::abs(point.x-middle)<=23 &&
+           point.y>=bounds.top+2 && point.y<=bounds.top+44;
+}
+
+void BeginEyeGrip(HWND hwnd,const POINT& point) {
+    if(!IsEyeGripScreenPoint(hwnd,point))return;
+    g_eyeGripDrag=true;
+    g_eyeGripMoved=false;
+    g_drag=false;
+    g_dragOrigin=point;
+    g_grabStartShiftX=g_islandShiftX;
+    g_grabStartShiftY=g_islandShiftY;
+}
+
+void FinishEyeGrip(HWND hwnd) {
+    if(!g_eyeGripDrag)return;
+    POINT point{};GetCursorPos(&point);
+    const int dx=point.x-g_dragOrigin.x;
+    const int dy=point.y-g_dragOrigin.y;
+    const bool moved=g_eyeGripMoved || std::abs(dx)>4 || std::abs(dy)>4;
+    RECT r{};GetWindowRect(hwnd,&r);
+    const RECT monitor=PrimaryBounds();
+    const int w=r.right-r.left,h=r.bottom-r.top;
+    const int baseX=(monitor.left+monitor.right-w)/2+g_xOffset;
+    const int baseY=monitor.top+g_topGap;
+    const int x=ClampInt(baseX+g_grabStartShiftX+dx,monitor.left,
+                         std::max(monitor.left,monitor.right-w));
+    const int y=ClampInt(baseY+g_grabStartShiftY+dy,monitor.top,
+                         std::max(monitor.top,monitor.bottom-h));
+    g_islandShiftX=x-baseX;
+    g_islandShiftY=y-baseY;
+    g_eyeGripDrag=false;
+    if(moved)SaveIslandPosition();
+}
+
 void Animate(HWND hwnd){
     if(g_stopping){DestroyWindow(hwnd);return;}
     if(g_clipDirty){
@@ -2290,9 +2340,11 @@ void Animate(HWND hwnd){
     // Audio/voice status never causes the panel to expand by itself.
     if(g_eyeGripDrag) {
         if((GetAsyncKeyState(VK_LBUTTON)&0x8000)==0) {
-            g_eyeGripDrag=false;
+            // Release can be swallowed by Windows for a layered window.
+            // Commit the location rather than silently discarding the drag.
+            FinishEyeGrip(hwnd);
             g_drag=false;
-            ReleaseCapture();
+            if(GetCapture()==hwnd)ReleaseCapture();
         } else {
             const int dx=mouse.x-g_dragOrigin.x;
             const int dy=mouse.y-g_dragOrigin.y;
@@ -2379,21 +2431,36 @@ void ReceiveWheel(int rawDelta,bool horizontal,DWORD eventTime) {
 }
 
 LRESULT CALLBACK LowLevelWheelHook(int code,WPARAM wp,LPARAM lp) {
-    if(code==HC_ACTION && (wp==WM_MOUSEWHEEL||wp==WM_MOUSEHWHEEL) && !g_stopping) {
-        HWND hwnd=g_hwnd;
-        if(hwnd) {
-            const MSLLHOOKSTRUCT* e=reinterpret_cast<const MSLLHOOKSTRUCT*>(lp);
-            RECT bounds{};
-            if(GetWindowRect(hwnd,&bounds) &&
-               e->pt.x>=bounds.left && e->pt.x<bounds.right &&
-               e->pt.y>=bounds.top && e->pt.y<bounds.bottom) {
-                // A non-activating island doesn't receive WM_MOUSEWHEEL reliably.
-                // Forward it to our own UI thread without consuming other apps' input.
-                if(g_open>0.35f && !g_eyeGripDrag && PostMessageW(hwnd,
-                        wp==WM_MOUSEHWHEEL?kWheelHorizontalMessage:kWheelMessage,
-                        HIWORD(e->mouseData),LPARAM(e->time))) {
-                    return 1; // La rueda controla HOVER, no la ventana que queda debajo.
-                }
+    if(code!=HC_ACTION || g_stopping || !lp)
+        return CallNextHookEx(nullptr,code,wp,lp);
+    HWND hwnd=g_hwnd;
+    if(!hwnd)return CallNextHookEx(nullptr,code,wp,lp);
+    const MSLLHOOKSTRUCT* e=reinterpret_cast<const MSLLHOOKSTRUCT*>(lp);
+    // Let real mouse/trackpad gestures work even when the transparent layer
+    // cannot receive clicks. Never intercept synthetic events from apps.
+    if(!(e->flags & LLMHF_INJECTED)){
+        if(wp==WM_LBUTTONDOWN && !g_hookGripActive.load() &&
+           IsEyeGripScreenPoint(hwnd,e->pt)){
+            if(PostMessageW(hwnd,kEyeGripBegin,0,0)){
+                g_hookGripActive.store(true);
+                return 1; // ONLY the tiny center grip owns this press.
+            }
+        }
+        if(wp==WM_LBUTTONUP && g_hookGripActive.exchange(false)){
+            PostMessageW(hwnd,kEyeGripEnd,0,0);
+            return 1; // Release is paired even when dragged outside island.
+        }
+    }
+    if((wp==WM_MOUSEWHEEL||wp==WM_MOUSEHWHEEL) &&
+       !g_hookGripActive.load()){
+        RECT bounds{};
+        if(GetWindowRect(hwnd,&bounds) &&
+           e->pt.x>=bounds.left && e->pt.x<bounds.right &&
+           e->pt.y>=bounds.top && e->pt.y<bounds.bottom) {
+            if(g_open>0.35f && PostMessageW(hwnd,
+                    wp==WM_MOUSEHWHEEL?kWheelHorizontalMessage:kWheelMessage,
+                    HIWORD(e->mouseData),LPARAM(e->time))) {
+                return 1;
             }
         }
     }
@@ -2454,6 +2521,14 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
             CloseGestureInfoHandle(reinterpret_cast<HGESTUREINFO>(lp));
             return 0;
         }
+        case kEyeGripBegin: {
+            POINT pointer{};GetCursorPos(&pointer);
+            BeginEyeGrip(hwnd,pointer);
+            return 0;
+        }
+        case kEyeGripEnd:
+            FinishEyeGrip(hwnd);
+            return 0;
         case kArrowNavigation:
             if(g_open>0.60f)ChangePage(g_currentPage+(static_cast<int>(wp)>0?1:-1));
             return 0;
@@ -2475,35 +2550,28 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
             if(wp==kTimer)Animate(hwnd);
             return 0;
         case WM_LBUTTONDOWN: {
-            g_drag=true;
-            g_eyeGripMoved=false;
-            GetCursorPos(&g_dragOrigin);
-            RECT r{};GetWindowRect(hwnd,&r);
-            // The grip is the space BETWEEN the two eyes. It is visible in
-            // both the compact island and the expanded state.
-            const float localX=float(g_dragOrigin.x-r.left);
-            const float localY=float(g_dragOrigin.y-r.top);
-            const float centerX=float(r.right-r.left)*0.5f;
-            g_eyeGripDrag=(std::abs(localX-centerX)<=16.0f &&
-                           localY>=4.0f && localY<=42.0f);
-            g_grabStartShiftX=g_islandShiftX;
-            g_grabStartShiftY=g_islandShiftY;
+            POINT point{};GetCursorPos(&point);
+            if(IsEyeGripScreenPoint(hwnd,point)){
+                BeginEyeGrip(hwnd,point);
+            } else {
+                g_drag=true;
+                g_dragOrigin=point;
+            }
+            // Keep normal touch/click swipes for the rest of the panel.
             SetCapture(hwnd);
             return 0;
         }
         case WM_LBUTTONUP:{
             POINT mouse{};GetCursorPos(&mouse);RECT r{};GetWindowRect(hwnd,&r);
-            const bool releasedGrip=g_eyeGripDrag;
-            const bool movedGrip=g_eyeGripMoved;
-            g_eyeGripDrag=false;
+            if(g_eyeGripDrag){
+                FinishEyeGrip(hwnd);
+                if(GetCapture()==hwnd)ReleaseCapture();
+                g_drag=false;
+                return 0;
+            }
             if(g_drag) {
                 g_drag=false;
                 ReleaseCapture();
-                if(releasedGrip){
-                    // Never treat eye-grip movement as a page swipe or click.
-                    if(movedGrip)SaveIslandPosition();
-                    return 0;
-                }
                 const int dx=mouse.x-g_dragOrigin.x;
                 const int dy=mouse.y-g_dragOrigin.y;
                 if(g_open>0.66f && (std::abs(dx)>45 || std::abs(dy)>45)) {
@@ -2518,7 +2586,8 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
         }
         case WM_CAPTURECHANGED:
             g_drag=false;
-            g_eyeGripDrag=false;
+            // The mouse hook owns capture for a center-grip drag.
+            if(!g_hookGripActive.load())FinishEyeGrip(hwnd);
             return 0;
         case WM_RBUTTONUP:{
             POINT mouse{};GetCursorPos(&mouse);RECT r{};GetWindowRect(hwnd,&r);
