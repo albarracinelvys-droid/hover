@@ -149,7 +149,7 @@ def parse(text: str) -> Intent:
     pc = parse_pc_command(t)
     if pc is not None:
         action, args = pc
-        return Intent(action,args=args,requires_confirmation=True)
+        return Intent(action,args=args,requires_confirmation=(action=="pc_delete"))
     # Natural information questions always go to Google before any app/file
     # routing: "como crear un repo" is research, NOT a repo creation command.
     # Explicit imperatives such as "crea un repositorio" do not match.
@@ -220,7 +220,7 @@ def parse(text: str) -> Intent:
     if t in ('google','el google'):
         return Intent('google_app',args={'service':'google_home'})
     if ('ultimo archivo' in t or 'ultimo fichero' in t) and 'descargas' in t and any(x in t for x in ('mueve', 'traslada', 'copia')):
-        return Intent('move_latest_download' if 'mueve' in t or 'traslada' in t else 'copy_latest_download', requires_confirmation=True)
+        return Intent('move_latest_download' if 'mueve' in t or 'traslada' in t else 'copy_latest_download')
     if any(x in t for x in ('adjunta', 'adjuntalo', 'adjuntala', 'sube', 'carga archivo', 'envia el archivo')):
         match = re.search(r'(?:llamado|nombre|archivo|taller)\s+([\w .-]+?)(?:\s+(?:a|en|con|y|para)\s+|$)', t)
         name = match.group(1).strip() if match else ''

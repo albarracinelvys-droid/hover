@@ -58,7 +58,7 @@ def publish(state: str, message: str = "", page: int = -1) -> bool:
                 pass
         # Throttle warnings: one locked file must not flood microphone logs.
         now=time.monotonic()
-        if now-_LAST_WARNING>20.0:
+        if _LAST_WARNING==0.0 or now-_LAST_WARNING>20.0:
             _LAST_WARNING=now
             print("[ui] Estado de Windhawk ocupado; lo reintentaré. "
                   "Si persiste, cierra instancias duplicadas de HOVER. "

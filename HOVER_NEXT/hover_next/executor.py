@@ -136,7 +136,7 @@ class Executor:
                     'crear carpetas y TXT, copiar o mover archivos, '
                     'renombrar, agregar texto, volumen, musica, '
                     'repositorios privados y más. Cambios requieren confirmacion.')
-        if action in ('pc_transfer','pc_rename','pc_create','pc_append'):
+        if action in ('pc_transfer','pc_rename','pc_create','pc_append','pc_delete'):
             from .pc_files import perform
             return perform(action,intent.args,self.config)
         if action == 'media_key':

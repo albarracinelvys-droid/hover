@@ -62,10 +62,10 @@ class IntentTests(unittest.TestCase):
     def test_project(self):
         i=parse('accede al proyecto de ChatGPT zap')
         self.assertEqual(i.action,'open_project')
-    def test_file_move_confirmation(self):
+    def test_file_move_without_confirmation(self):
         i=parse('mueve el último archivo de Descargas a mi carpeta configurada')
         self.assertEqual(i.action,'move_latest_download')
-        self.assertTrue(i.requires_confirmation)
+        self.assertFalse(i.requires_confirmation)
     def test_upload_requires_confirmation(self):
         i=parse('adjunta archivo taller2.pdf a Claude')
         self.assertEqual(i.action,'upload_file')
