@@ -254,17 +254,24 @@ def validate(output,spoken):
 
 def model_intent(spoken):
     global _MISSING_UNTIL
-    if not _candidate(spoken) or os.environ.get("HOVER_NLU","auto").lower()=="off":
+    if os.environ.get("HOVER_NLU","auto").lower()=="off":
+        print("[nlu] desactivado_por_usuario",flush=True)
+        return None
+    if not _candidate(spoken):
+        print("[nlu] filtrado_sin_peticion_segura",flush=True)
         return None
     now=time.monotonic()
     with _CACHE_LOCK:
         cached=_CACHE.get(spoken)
         if cached is not None and now-cached[0]<8:
+            print("[nlu] cache",flush=True)
             return cached[1]
         if now<_MISSING_UNTIL:
+            print("[nlu] servidor_en_espera_tras_error",flush=True)
             return None
     model=os.environ.get("HOVER_NLU_MODEL",DEFAULT_MODEL)
     if not re.fullmatch(r"[A-Za-z0-9][\w.:-]{1,80}",model):
+        print("[nlu] nombre_de_modelo_invalido",flush=True)
         return None
     request=json.dumps({
         "model":model,"stream":False,
@@ -273,11 +280,15 @@ def model_intent(spoken):
         "format":SCHEMA,"options":{"temperature":0,"num_predict":256},
         "keep_alive":MODEL_KEEP_ALIVE
     },ensure_ascii=False).encode("utf-8")
+    try:
+        timeout=max(5.0,min(30.0,float(os.environ.get("HOVER_NLU_TIMEOUT","15"))))
+    except ValueError:
+        timeout=15.0
     started=time.monotonic()
     try:
         req=Request(HOST+"/api/chat",data=request,headers={
             "Content-Type":"application/json"},method="POST")
-        with urlopen(req,timeout=7) as response:
+        with urlopen(req,timeout=timeout) as response:
             raw=response.read(24000)
         wrapper=json.loads(raw)
         msg=wrapper.get("message",{})
@@ -285,10 +296,19 @@ def model_intent(spoken):
         answer=validate(decoded,spoken)
         print(f"[latencia] modelo_local={(time.monotonic()-started)*1000:.0f}ms",
               flush=True)
-    except (URLError,OSError,ValueError,KeyError,TypeError,TimeoutError):
-        # Brief circuit-breaker when Ollama is absent; voice keeps working.
+        if answer is None:
+            print("[nlu] modelo_desconocido_o_respuesta_rechazada",flush=True)
+        else:
+            print("[nlu] interpretado_seguro:",answer.action,flush=True)
+    except (URLError,OSError,TimeoutError) as exc:
+        reason=("tiempo_agotado" if isinstance(exc,TimeoutError)
+                else "servidor_local_no_disponible")
+        print("[nlu]",reason,flush=True)
         with _CACHE_LOCK:
-            _MISSING_UNTIL=time.monotonic()+12
+            _MISSING_UNTIL=time.monotonic()+3
+        return None
+    except (ValueError,KeyError,TypeError):
+        print("[nlu] respuesta_json_invalida",flush=True)
         return None
     with _CACHE_LOCK:
         if len(_CACHE)>32:
