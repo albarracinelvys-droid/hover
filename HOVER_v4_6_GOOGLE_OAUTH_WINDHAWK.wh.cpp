@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id hover-island-v38-hardware
-// @name HOVER v4.8 - Spotify interactivo y Calendar
+// @name HOVER v4.9 - Gestos y arrastre de isla
 // @description Calendario interactivo con eventos de Google, detalles por día y enlaces, vía motor Python local.
-// @version 4.8.0
+// @version 4.9.0
 // @author HOVER - version de prueba
 // @include explorer.exe
 // @architecture x86-64
@@ -19,12 +19,13 @@
 - REPOSO: negro opaco, reloj, ojos y texto discreto HOVER, sin titulo de cancion.
 - APERTURA: por hover, colapsa al salir el cursor.
 - PAGINAS: musica, copias, calendario, atajos y equipo con transicion VERTICAL.
-- GESTOS: rueda vertical/horizontal, WM_GESTURE y flechas arriba/abajo con cursor sobre HOVER.
+- GESTOS: rueda vertical/horizontal, desplazamiento de dos dedos del trackpad, WM_GESTURE y flechas con cursor sobre HOVER.
+- ARRASTRAR: sostener entre los ojos y mover la isla libremente por la pantalla. No se interpreta como cambio de pagina.
 - MEDIA: teclas multimedia globales; el puente v3.9.2 trae caratula si Windows la ofrece, o ecualizador animado.
 - MONITOR: CPU, RAM, GPU si PDH lo ofrece, NET UP/DOWN y disco en 6 tarjetas.
 - SIN BORDES: contorno exterior eliminado, iconos vectoriales mejorados.
 - CINCO MODULOS sin titulo ni barra horizontal. Cinco puntos VERTICALES; el activo crece.
-- OJOS aumentan 42% al abrir la isla.
+- OJOS aumentan hasta 75% al abrir la isla, con transicion suave.
 - ATAJOS: 6 (sin Musica ni Historial). Carpeta permite soltar archivos: COPIA sin borrar origen.
 - Carpeta favorita se guarda en AppData\HOVER, clic derecho sobre Carpeta para cambiar.
 - VOZ: asistente Python 4.1 con alias foneticos para nombres ingleses (requiere Vosk espanol).
