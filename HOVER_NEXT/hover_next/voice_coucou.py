@@ -113,8 +113,18 @@ class VoiceDialogue:
 
         # HOVER prompted for this slot; don't require the wake phrase again.
         if self.pending_kind and now<self.pending_until:
-            # A full safe command overrides a pending name only when wake
-            # is explicit, otherwise don't trust unattended background speech.
+            # When Whisper drops HOVER but keeps "Oye", an explicit safe
+            # replacement request may supersede the pending name.
+            if normalized.startswith("oye "):
+                candidate=normalized[4:].strip()
+                replacement=parse(candidate)
+                safe={"local_name_needed","create_local","google_search",
+                      "google_app","windows_app","office_new","open_link",
+                      "media_key","spotify_play","spotify_resume"}
+                if replacement.action in safe:
+                    print("[dialogo] Cambiando solicitud pendiente a:",candidate,flush=True)
+                    self.pending_kind=""
+                    return self._command(candidate)
             return self._handle_name(spoken)
 
         if self.dictation_provider and now<self.dictation_until:
