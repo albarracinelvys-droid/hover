@@ -23,10 +23,23 @@ def _contains(text: str, *phrases: str) -> bool:
 
 def parse_direct(text: str) -> Intent | None:
     t = clean(text)
-    # Global Windows media keys, deliberately not claiming a specific app played.
+    # Global Windows media keys. These act on the active media session.
     media_phrases = (
-        (r'^(?:pausa|pausar|pausa la|deten|reanuda|continua|sigue|reproduce)'
-         r'\s+(?:la\s+)?(?:musica|cancion|reproduccion)
+        (r"^(?:pausa|pausar|deten|reanuda|continua|sigue|reproduce)\s+"
+         r"(?:la\s+)?(?:musica|cancion|reproduccion)$", "play_pause"),
+        (r"^(?:siguiente|pasa|salta)(?:\s+(?:la|a la))?\s+"
+         r"(?:cancion|pista|musica)$", "next"),
+        (r"^(?:anterior|vuelve)(?:\s+(?:la|a la))?\s+"
+         r"(?:cancion|pista)$", "previous"),
+        (r"^(?:sube|aumenta)(?:\s+el)?\s+volumen$", "volume_up"),
+        (r"^(?:baja|reduce)(?:\s+el)?\s+volumen$", "volume_down"),
+        (r"^(?:silencia|silenciar|mute|quita el sonido|activa el silencio)$",
+         "volume_mute"),
+    )
+    for pattern, key in media_phrases:
+        if re.fullmatch(pattern, t):
+            return Intent("media_key", args={"key":key})
+    # Closing Google requires a foreground browser check.
     if re.fullmatch(r"(?:cierra|cerrar) (?:la (?:pestana|ventana) de )?google",t):
         return Intent("close_google_tab")
     launch = _contains(t, "abre", "abrir", "muestra", "muestrame",
