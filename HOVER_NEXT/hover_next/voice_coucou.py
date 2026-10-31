@@ -440,6 +440,15 @@ def run(executor, *, engine="auto", model="small",
     google_thread=threading.Thread(target=google_worker,name="HOVER-GoogleOAuth",daemon=True)
     worker.start()
     google_thread.start()
+
+    def warm_nlu_worker():
+        # Warm after mic and ASR initialization. Never delay audio capture.
+        if not stop.wait(3.0):
+            from .local_nlu import warm_model
+            warm_model()
+
+    threading.Thread(target=warm_nlu_worker,name="HOVER-QwenWarmup",
+                     daemon=True).start()
     publish("idle","HOVER listo")
     print(f"[ready] HOVER v5 | {recognizer.name} | {info['name']} | "
           f"dispositivo={device if device is not None else 'predeterminado'} "
