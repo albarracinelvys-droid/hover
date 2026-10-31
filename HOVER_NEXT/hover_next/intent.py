@@ -137,8 +137,11 @@ def parse(text: str) -> Intent:
     # Natural information questions always go to Google before any app/file
     # routing: "como crear un repo" is research, NOT a repo creation command.
     # Explicit imperatives such as "crea un repositorio" do not match.
-    from .information_queries import information_request
-    info = information_request(t)
+    from .information_queries import information_request, remove_wake_preserving_text
+    # Keep accents and C++/C# intact for Google, even though the wake
+    # detector normalizes punctuation for reliable activation.
+    raw_info = remove_wake_preserving_text(text) if spoken_command is not None else text
+    info = information_request(raw_info if raw_info is not None else t)
     if info is not None:
         return Intent(info[0], args=info[1])
     # The wake parser strips punctuation, including hyphens. For repo names,
