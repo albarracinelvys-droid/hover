@@ -9,8 +9,8 @@ import re
 import unicodedata
 
 _WAKE = re.compile(
-    r"^(?:oye|oie|oi|hey|hola|huji|uji|huyi)\s+"
-    r"(?:hover|jover|over|llover|hober|huver)\b"
+    r"^(?:(?:oye|oie|oi|hey|hola|huji|uji|huyi)\s+)?"
+    r"(?:hover|jover|over|llover|hober|huver|hoguer)\b"
 )
 
 
