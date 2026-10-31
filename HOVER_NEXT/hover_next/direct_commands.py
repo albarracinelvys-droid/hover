@@ -66,6 +66,11 @@ def parse_direct(text: str) -> Intent | None:
     }
     for service, aliases in google.items():
         if _contains(t, *aliases):
+            if service == "google_calendar" and new and _contains(t, "evento", "cita"):
+                return Intent("google_app", args={"service": "google_calendar_new"})
+            if service == "google_gmail" and _contains(t, "redacta", "redactar", "nuevo correo",
+                                                       "nuevo mensaje", "escribir correo"):
+                return Intent("google_app", args={"service": "google_gmail_compose"})
             if new and service in ("google_docs", "google_sheets", "google_slides"):
                 service += "_new"
             return Intent("google_app", args={"service": service})
