@@ -40,8 +40,16 @@ def main():
     parser.add_argument("--mic-test", action="store_true", help="Medir sonido del microfono sin Whisper")
     parser.add_argument("--mic", type=int, default=None, help="Indice del microfono")
     parser.add_argument("--threshold", type=float, default=0.0008, help="Umbral RMS, predeterminado 0.0008")
-    parser.add_argument("--model", default="small", help="Modelo faster-whisper")
+    parser.add_argument("--model", default="small", help="Modelo faster-whisper si no hay Parakeet")
+    parser.add_argument("--engine", choices=("auto","parakeet","whisper"),default="auto",
+                        help="Auto elige Parakeet si esta instalado; si no Whisper")
+    parser.add_argument("--install-parakeet",action="store_true",
+                        help="Descargar y verificar el modelo local usado por Coucou")
     args = parser.parse_args()
+    if args.install_parakeet:
+        from .recognizers import install_parakeet
+        install_parakeet()
+        return
     if args.mic_test:
         from .voice import test_microphone
         test_microphone(device=args.mic,threshold=args.threshold)
@@ -50,8 +58,9 @@ def main():
     publish("idle", "HOVER listo: silencioso")
     try:
         if args.voice:
-            from .voice import run_voice
-            run_voice(executor,args.model,device=args.mic,threshold=args.threshold)
+            from .voice_coucou import run
+            run(executor,engine=args.engine,model=args.model,
+                device=args.mic,threshold=args.threshold)
         elif args.text:
             run_one(args.text,executor)
         else:
