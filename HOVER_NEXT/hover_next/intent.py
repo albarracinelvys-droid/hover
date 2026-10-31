@@ -136,7 +136,7 @@ def parse(text: str) -> Intent:
     # from a general farewell inside a longer sentence.
     if re.fullmatch(r"(?:bye bye|by by|bai bai|bay bay)", t):
         return Intent("pc_shutdown")
-    if re.fullmatch(r"(?:apaga|apagar|apaga ya)\\s+(?:el|mi|la)?\\s*(?:pc|computador|ordenador|equipo)",t):
+    if re.fullmatch(r"(?:apaga|apagar|apaga ya)\s+(?:el|mi|la)?\s*(?:pc|computador|ordenador|equipo)",t):
         return Intent("pc_shutdown")
     # Guard state-changing GitHub requests before generic web shortcuts.
     if re.fullmatch(r'(?:que puedes hacer|que sabes hacer|ayuda|comandos|mostrar comandos|lista de comandos)', t):
