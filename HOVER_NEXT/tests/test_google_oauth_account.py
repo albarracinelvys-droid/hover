@@ -41,6 +41,73 @@ class OAuthLocalTests(unittest.TestCase):
         self.assertNotIn("https://www.googleapis.com/auth/drive",sum(
             [list(x) for x in auth.SCOPES.values()],[]))
 
+    def _scope_warning(self, service, granted):
+        problem=Warning("Scope has changed")
+        problem.old_scope=auth._requested_scopes(service)
+        problem.new_scope=granted
+        problem.token={"access_token":"not-a-real-token","token_type":"Bearer"}
+        return problem
+
+    def test_google_identity_aliases_are_accepted_without_relaxing_oauthlib(self):
+        from types import SimpleNamespace
+        service="drive"
+        granted=[
+            auth.SCOPES["drive"][0],
+            "openid",
+            "https://www.googleapis.com/auth/userinfo.email",
+        ]
+        client=MagicMock()
+        problem=self._scope_warning(service,granted)
+        client.parse_request_body_response.side_effect=problem
+        flow=SimpleNamespace(oauth2session=SimpleNamespace(_client=client))
+        auth._permit_google_identity_aliases(flow,service)
+        result=client.parse_request_body_response("fake response")
+        self.assertIs(result,problem.token)
+        self.assertIs(client.token,problem.token)
+        client.populate_token_attributes.assert_called_once_with(problem.token)
+        # Does not change the process-wide OAUTHLIB_RELAX_TOKEN_SCOPE flag.
+        self.assertNotIn("OAUTHLIB_RELAX_TOKEN_SCOPE",os.environ)
+
+    def test_google_scope_mismatch_rejects_missing_drive_permission(self):
+        from types import SimpleNamespace
+        client=MagicMock()
+        client.parse_request_body_response.side_effect=self._scope_warning(
+            "drive",["openid","email"])
+        flow=SimpleNamespace(oauth2session=SimpleNamespace(_client=client))
+        auth._permit_google_identity_aliases(flow,"drive")
+        with self.assertRaisesRegex(auth.GoogleAuthError,"permisos"):
+            client.parse_request_body_response("fake response")
+        client.populate_token_attributes.assert_not_called()
+
+    def test_google_scope_mismatch_rejects_extra_privileges(self):
+        from types import SimpleNamespace
+        client=MagicMock()
+        client.parse_request_body_response.side_effect=self._scope_warning(
+            "drive",[
+                auth.SCOPES["drive"][0],
+                "https://www.googleapis.com/auth/userinfo.email",
+                "https://www.googleapis.com/auth/gmail.readonly",
+            ])
+        flow=SimpleNamespace(oauth2session=SimpleNamespace(_client=client))
+        auth._permit_google_identity_aliases(flow,"drive")
+        with self.assertRaisesRegex(auth.GoogleAuthError,"inesperados"):
+            client.parse_request_body_response("fake response")
+        client.populate_token_attributes.assert_not_called()
+
+    def test_scope_exception_without_issued_token_is_rejected(self):
+        from types import SimpleNamespace
+        client=MagicMock()
+        problem=self._scope_warning("drive",[
+            auth.SCOPES["drive"][0],
+            "https://www.googleapis.com/auth/userinfo.email"])
+        problem.token={}
+        client.parse_request_body_response.side_effect=problem
+        flow=SimpleNamespace(oauth2session=SimpleNamespace(_client=client))
+        auth._permit_google_identity_aliases(flow,"drive")
+        with self.assertRaises(auth.GoogleAuthError):
+            client.parse_request_body_response("fake response")
+        client.populate_token_attributes.assert_not_called()
+
     def test_no_client_json_before_user_adds_own_credentials(self):
         with self.assertRaisesRegex(auth.GoogleAuthError,"google_oauth_client.json"):
             auth._client_path()
