@@ -22,9 +22,9 @@ def selected_folder(config: dict) -> Path:
     if reference.is_file():
         try:
             raw = reference.read_bytes()
-            if len(raw) > 2048 or not raw.startswith(b"\\xff\\xfe"):
+            if len(raw) > 2048 or not raw.startswith(b"\xff\xfe"):
                 raise ValueError("Ruta favorita con formato inválido")
-            path = raw.decode("utf-16").strip("\\x00\\r\\n ")
+            path = raw.decode("utf-16").strip("\x00\r\n ")
             if path:
                 folder = Path(path).expanduser()
         except (OSError, UnicodeError, ValueError) as exc:
@@ -48,7 +48,7 @@ def safe_basename(value: str) -> str:
         raise ValueError("El nombre debe tener entre 1 y 100 caracteres.")
     if name in (".", "..") or any(c in name for c in '\\\\/<>:"|?*'):
         raise ValueError("El nombre no puede incluir rutas ni caracteres especiales.")
-    if re.search(r"[\\x00-\\x1f]", name):
+    if re.search(r"[\x00-\x1f]", name):
         raise ValueError("Caracteres de control no permitidos.")
     stem = name.split(".")[0].upper()
     if stem in {"CON", "PRN", "AUX", "NUL", *{f"COM{i}" for i in range(1, 10)},
