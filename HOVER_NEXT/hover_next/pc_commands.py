@@ -21,13 +21,13 @@ def _clean(t):
     # Natural requests are normalized into the same bounded actions rather
     # than requiring users to memorize one fixed imperative phrase.
     t=re.sub(
-        r"^(?:quiero|necesito)\\s+que\\s+(?:me\\s+)?"
-        r"(?:crees|creas|hagas|generes|prepares)\\s+",
+        r"^(?:quiero|necesito)\s+que\s+(?:me\s+)?"
+        r"(?:crees|creas|hagas|generes|prepares)\s+",
         "crea ",t)
-    t=re.sub(r"^(?:hazme|haceme|preparame|construye)\\s+","crea ",t)
+    t=re.sub(r"^(?:hazme|haceme|preparame|construye)\s+","crea ",t)
     t=re.sub(
-        r"^(?:me\\s+)?(?:puedes|podrias)\\s+"
-        r"(?:hacer|crear|preparar)\\s+",
+        r"^(?:me\s+)?(?:puedes|podrias)\s+"
+        r"(?:hacer|crear|preparar)\s+",
         "crea ",t)
     # Polite imperatives must not be mistaken for Google questions.
     t=re.sub(r"^(?:oye|hey|por favor)[, ]+", "", t)
