@@ -157,7 +157,13 @@ def parse(text: str) -> Intent:
         m=re.search(r'(?:preguntale|pregunta a|enviale|envia este prompt|escribe a|dile a)\s+(?:a\s+)?(?:chatgpt|chat gpt|claude|cloud)?\s*(?:que|esto|lo siguiente|:)?\s*(.+)',t)
         prompt=(m.group(1) if m else '').strip(' :')
         if not prompt: return Intent('unknown')
-        return Intent('new_chat_and_send' if re.search(r'\b(nuevo chat|nueva conversacion|crea un chat|crear chat)\b',t) else 'send_prompt',provider,{'prompt':prompt},requires_confirmation=True)
+        # Sending the explicitly dictated text to a chosen chat is a routine
+        # action, not a purchase, deletion or file disclosure.
+        # No typed "SI": the voice session must remain hands-free.
+        if re.search(r'\b(preguntale|pregunta a)\b',t):
+            from .chat_command import _question
+            prompt=_question(prompt)
+        return Intent('new_chat_and_send' if re.search(r'\b(nuevo chat|nueva conversacion|crea un chat|crear chat)\b',t) else 'send_prompt',provider,{'prompt':prompt})
     if re.search(r'\b(nuevo chat|nueva conversacion|crea un chat|crear chat)\b',t) and provider in ('chatgpt','claude'):
         return Intent('new_chat',provider)
     if re.search(r'(?:abre|abrir|accede|entra|ingresa|visita|muestra)\b',t) and provider in ('chatgpt','claude'):
