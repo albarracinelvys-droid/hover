@@ -222,11 +222,42 @@ class Executor:
             return f'Archivo {source.name} {"copiado" if action.startswith("copy") else "movido"} a {dest}'
         if action=='create_private_repo':
             name=intent.args['name']
-            if not re.fullmatch(r'[a-zA-Z0-9._-]{1,100}',name):return 'Nombre invalido.'
+            if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._-]{1,79}',name):
+                raise ValueError('Nombre de repositorio no válido. No se creó nada.')
             exe=shutil.which('gh')
-            if not exe:return ('GitHub CLI no está instalado. En PowerShell: '
-                               'winget install --id GitHub.cli -e; después gh auth login.')
-            r=subprocess.run([exe,'repo','create',name,'--private','--description','Repositorio creado con HOVER'],capture_output=True,text=True,timeout=45)
-            if r.returncode:raise RuntimeError((r.stderr or r.stdout).strip())
-            return (r.stdout or f'Repositorio privado {name} creado').strip()
+            if not exe:
+                raise RuntimeError('Falta GitHub CLI. Instala gh y ejecuta gh auth login.')
+            from .ui_bridge import publish
+            from .github_navigation import created_repo_url, show_repo
+            publish("thinking",f"GitHub: creando repo privado {name}",3)
+            print(f"[github] Creando repositorio PRIVADO: {name}",flush=True)
+            result=subprocess.run(
+                [exe,'repo','create',name,'--private',
+                 '--description','Repositorio creado con HOVER'],
+                capture_output=True,text=True,timeout=60,stdin=subprocess.DEVNULL)
+            if result.returncode:
+                raise RuntimeError(
+                    'GitHub no creó el repositorio: '
+                    +(result.stderr or result.stdout or 'Error de GitHub CLI').strip())
+            publish("thinking",f"GitHub: {name} creado. Buscando URL...",3)
+            url=created_repo_url((result.stdout or '')+'\n'+(result.stderr or ''),name)
+            if not url:
+                # Use the GitHub CLI authenticated account to obtain the real
+                # owner and repository URL; never guess the username.
+                lookup=subprocess.run(
+                    [exe,'repo','view',name,'--json','url','--jq','.url'],
+                    capture_output=True,text=True,timeout=20,stdin=subprocess.DEVNULL)
+                if lookup.returncode==0:
+                    url=created_repo_url(lookup.stdout or '',name)
+            if url:
+                publish("thinking",f"GitHub creado: {name}. Abriendo Chrome...",3)
+                browser=show_repo(url)
+                if browser:
+                    print(f"[github] EN VIVO: {url} abierto en {browser}",flush=True)
+                    return f"Repositorio privado {name} creado y abierto en {browser}: {url}"
+                print(f"[github] Repo creado; navegador no respondió: {url}",flush=True)
+                return f"Repositorio privado {name} creado: {url}. No se pudo abrir el navegador."
+            print(f"[github] Creado {name}, pero no se pudo verificar su URL.",flush=True)
+            return (f"Repositorio privado {name} creado en GitHub, "
+                    "pero no pude recuperar su enlace para abrirlo.")
         return 'Accion no implementada.'
