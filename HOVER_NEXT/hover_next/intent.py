@@ -100,7 +100,13 @@ def parse(text: str) -> Intent:
     repo_request = _parse_private_repo_request(normalize(text))
     if repo_request is not None:
         return repo_request
-    search_request = _parse_google_search(t)
+    # Preserve punctuation inside search terms (for example "C++", "C#")
+    # that the wake-word normalizer intentionally drops.
+    search_text = re.sub(
+        r'^(?:(?:oye|oie|oi|hey|hola|huji|uji|huyi)\s+)?'
+        r'(?:hover|jover|over|llover|hober|huver|hoguer)\b[\s.,!?;:¿¡]*',
+        '', normalize(text))
+    search_request = _parse_google_search(search_text)
     if search_request is not None:
         return search_request
     # ASR inserts "Oye" even after the wake phrase: "Hover. Oye Calculadora".
