@@ -7,6 +7,7 @@ trusted after verifying the live process command line with psutil.
 """
 from __future__ import annotations
 
+import argparse
 import os
 from pathlib import Path
 import subprocess
@@ -52,10 +53,26 @@ def current_pid():
     return pid if is_hover_voice_process(pid) else None
 
 
-def start():
+def _running_hover_process():
+    """Detect even an older console-launched instance of the same voice app."""
+    recorded=current_pid()
+    if recorded is not None:
+        return recorded
+    try:
+        import psutil
+        for process in psutil.process_iter(attrs=["pid","cmdline"]):
+            cmd=[str(x).casefold() for x in (process.info.get("cmdline") or [])]
+            if "-m" in cmd and "hover_next.app" in cmd and "--voice" in cmd:
+                return int(process.info["pid"])
+    except (ImportError,ValueError,OSError):
+        pass
+    return None
+
+
+def start(*,engine="auto",mic=None,threshold=None):
     if sys.platform!="win32":
         raise BackgroundLaunchError("El inicio sin terminal requiere Windows.")
-    previous=current_pid()
+    previous=_running_hover_process()
     if previous is not None:
         print(f"HOVER ya está activo sin consola (PID {previous}).",flush=True)
         return 0
@@ -66,11 +83,17 @@ def start():
     pid_path,log_path=state_paths()
     workdir=Path(__file__).resolve().parents[1]
     creationflags=getattr(subprocess,"DETACHED_PROCESS",0x00000008)
+    command=[str(exe),"-m","hover_next.app","--voice","--model","small",
+             "--engine",engine]
+    if mic is not None:
+        command.extend(["--mic",str(mic)])
+    if threshold is not None:
+        command.extend(["--threshold",str(threshold)])
     with log_path.open("a",encoding="utf-8") as log:
         log.write("\n[launcher] Iniciando HOVER v5 sin terminal.\n")
         log.flush()
         process=subprocess.Popen(
-            [str(exe),"-m","hover_next.app","--voice","--model","small"],
+            command,
             cwd=str(workdir),stdin=subprocess.DEVNULL,stdout=log,
             stderr=subprocess.STDOUT,close_fds=True,
             creationflags=creationflags)
@@ -118,8 +141,22 @@ def stop():
 
 
 def main():
+    parser=argparse.ArgumentParser(description="Iniciar o detener HOVER sin consola")
+    parser.add_argument("--stop",action="store_true")
+    parser.add_argument("--engine",choices=("auto","parakeet","whisper"),
+                        default="auto")
+    parser.add_argument("--mic",type=int)
+    parser.add_argument("--threshold",type=float)
+    options=parser.parse_args()
     try:
-        return stop() if "--stop" in sys.argv else start()
+        if options.stop:
+            return stop()
+        if options.threshold is not None and not 0<options.threshold<=1:
+            raise BackgroundLaunchError("El umbral RMS está fuera de rango.")
+        if options.mic is not None and not 0<=options.mic<=100:
+            raise BackgroundLaunchError("Índice de micrófono inválido.")
+        return start(engine=options.engine,mic=options.mic,
+                     threshold=options.threshold)
     except BackgroundLaunchError as exc:
         print("HOVER:",exc,flush=True)
         return 1
