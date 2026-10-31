@@ -2,7 +2,7 @@ name: Windhawk C++ Windows syntax
 on:
   push:
     paths:
-      - 'HOVER_v4_5_PROYECTOS_DESDE_ATAJOS_WINDHAWK.wh.cpp'
+      - 'HOVER_v4_6_GOOGLE_OAUTH_WINDHAWK.wh.cpp'
       - 'HOVER_NEXT/tests/windhawk_compile_stub.cpp'
       - '.github/workflows/hover-windhawk-compile.yml'
   workflow_dispatch:
