@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id hover-island-v38-hardware
-// @name HOVER v4.6 - Google OAuth en Atajos
-// @description Isla original con Google OAuth, Gmail, Drive, Calendar y Docs via motor Python HOVER.
-// @version 4.6.0
+// @name HOVER v4.7 - Calendar interactivo y Google OAuth
+// @description Calendario interactivo con eventos de Google, detalles por día y enlaces, vía motor Python local.
+// @version 4.7.0
 // @author HOVER - version de prueba
 // @include explorer.exe
 // @architecture x86-64
@@ -29,7 +29,7 @@
 - Carpeta favorita se guarda en AppData\HOVER, clic derecho sobre Carpeta para cambiar.
 - VOZ: asistente Python 4.1 con alias foneticos para nombres ingleses (requiere Vosk espanol).
 - PESTANAS: adicionales configurables por voz (maximo 5), enlaces HTTP(S) seguros.
-- CALENDARIO: crea archivos .ics revisables; no escribe sin permiso en servicios externos.
+- CALENDARIO: sincroniza metadatos de Google Calendar desde HOVER Python, marca dias, permite ver y abrir eventos y crear nuevos en Google Calendar.
 
 Desactiva otros mods de isla para evitar dos superposiciones.
 La visualizacion del portapapeles puede desactivarse por privacidad.
