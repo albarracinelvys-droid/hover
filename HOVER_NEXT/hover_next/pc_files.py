@@ -110,6 +110,19 @@ def _unique_destination(folder: Path, name: str) -> Path:
     return target
 
 
+def prepare_transfer(args: dict, config: dict) -> dict:
+    """Freeze the exact latest filename before a visual confirmation dialog."""
+    if args.get("pick") != "latest":
+        return dict(args)
+    folder=location(args["from"],config)
+    source=_latest(folder,args.get("kind","any"))
+    result=dict(args)
+    result.update({"pick":"name","name":source.name,
+                   "size":str(source.stat().st_size),
+                   "mtime_ns":str(source.stat().st_mtime_ns)})
+    return result
+
+
 def perform(action: str, args: dict, config: dict) -> str:
     if action == "pc_transfer":
         source_folder=location(args["from"],config)
@@ -120,6 +133,13 @@ def perform(action: str, args: dict, config: dict) -> str:
             source=_latest(source_folder,args.get("kind","any"))
         else:
             source=_direct_child(source_folder,args["name"],files_only=True)
+        # Do not silently switch to another "latest" download after the
+        # user approves the filename in the Windows confirmation dialog.
+        if "size" in args and (
+            str(source.stat().st_size)!=args["size"] or
+            str(source.stat().st_mtime_ns)!=args["mtime_ns"]
+        ):
+            raise PCFileError("El archivo cambió tras la confirmación. Repite la orden.")
         destination=_unique_destination(destination_folder,source.name)
         if args["operation"] == "move":
             shutil.move(str(source),str(destination))
