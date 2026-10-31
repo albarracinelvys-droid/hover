@@ -22,7 +22,7 @@ def normalize(s: str) -> str:
 def identify_provider(t: str) -> str:
     if re.search(r'\b(chat\s*gpt|chatgpt|chat\s*gepete|chat\s*e\s*pepe|cati\s*petit)\b', t):
         return 'chatgpt'
-    if re.search(r'\b(claude|cloud|clau)\b', t):
+    if re.search(r'\b(claude|cloud|clau|clout|clouding|clod|cloude)\b', t):
         return 'claude'
     if re.search(r'\b(spotify|spotifai|espotifai)\b', t):
         return 'spotify'
@@ -46,6 +46,14 @@ def parse(text: str) -> Intent:
     if direct is not None:
         return direct
     provider = identify_provider(t)
+    # Whisper/Parakeet often returns just the app name after the wake word.
+    # That is an explicit request to open it, not an unknown command.
+    if t in ('chatgpt', 'chat gpt', 'chat gepete', 'chat e pepe'):
+        return Intent('open_site','chatgpt')
+    if t in ('claude','cloud','clout','clouding','clod','cloude','clau'):
+        return Intent('open_site','claude')
+    if t in ('spotify','espotifai','spotifai'):
+        return Intent('spotify_play','spotify')
     if re.search(r'\b(crea|crear)\s+(?:un\s+)?(?:nuevo\s+)?repo(?:sitorio)?\s+(?:en\s+github\s+)?(?:privado\s+)?(?:llamado|que\s+se\s+llame)\s+([\w.-]+)', t):
         name = re.search(r'(?:llamado|que\s+se\s+llame)\s+([\w.-]+)', t).group(1)
         return Intent('create_private_repo', args={'name': name}, requires_confirmation=True)
