@@ -1,3 +1,55 @@
+## Corrección inmediata: reconocimiento correcto pero sin acciones
+
+Los registros mostraron que HOVER transcribía «Hover. ChatGPT»,
+«Abre Clouding», «Hover. Clout» y «Abre una nueva pestaña de Google»,
+pero los interpretaba como \`unknown\`. **Ya se añadieron reglas para
+esas frases reales**. Para tareas sencillas como abrir ChatGPT o Claude,
+HOVER ahora utiliza el navegador predeterminado de Windows, sin depender
+del perfil automatizado de Playwright.
+
+### Verificar acciones SIN micrófono
+
+En PowerShell:
+
+\`\`\`powershell
+cd C:\Users\gomez\hover
+git pull origin main
+cd .\HOVER_NEXT
+.\PROBAR_APERTURA_REAL.bat
+\`\`\`
+
+Esta prueba debe intentar abrir **Calculadora, ChatGPT y Google**. Si no
+lo hace, envía el texto de la consola: podremos diagnosticar el ejecutor
+sin mezclarlo con problemas del micro.
+
+### Comprobar con tu voz
+
+Cierra todos los asistentes antiguos, después ejecuta:
+
+\`\`\`powershell
+.\INICIAR_HOVER.bat
+\`\`\`
+
+Prueba «Oye Hover, abre calculadora», «Oye Hover, abre Claude» y
+«Oye Hover, abre una nueva pestaña de Google».
+
+La consola debe mostrar \`[voz]\` seguido de \`[accion]\` y la respuesta
+\`HOVER: ...\`. HOVER no habla ni reproduce pitidos.
+
+\`Oye Hover, cierra Google\` cierra una pestaña **solo si el navegador
+con la pestaña Google está en primer plano**. No permite cerrar otras
+ventanas por error.
+
+### Parakeet
+
+El modelo debe pasar SHA-256. Si \`joiner.int8.onnx\` falla la comprobación,
+el instalador reintenta ese archivo sin volver a descargar el codificador
+completo. Para probarlo de nuevo, ejecuta
+\`INSTALAR_MOTOR_COUCOU_HOVER.bat\`. **No es obligatorio para comprobar
+las acciones:** Whisper sigue siendo un motor alternativo.
+
+
+---
 
 ## MOTOR HOVER 5 — reparación del reconocimiento basada en Coucou Windows
 
