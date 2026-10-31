@@ -20,7 +20,12 @@ from .recognizers import create_recognizer
 
 
 class VoiceDialogue:
-    """Text-only state transitions; testing this doesn't require a microphone."""
+    """Wake -> command -> brief contextual follow-ups, all without speech output.
+
+    A name requested for a safe new file or a private repository can be
+    dictated in the next utterance without repeating the wake word.
+    Unrequested background audio never creates files or repositories.
+    """
     def __init__(self, execute, send_dictated, clock=time.monotonic):
         self.execute = execute
         self.send_dictated = send_dictated
@@ -29,68 +34,159 @@ class VoiceDialogue:
         self.ptt_until = 0.0
         self.dictation_provider = ""
         self.dictation_until = 0.0
+        self.pending_kind = ""
+        self.pending_until = 0.0
+        self.recent_until = 0.0
+        self.recent_action = ""
 
     def press_hotkey(self):
         self.ptt_until = self.clock() + 10.0
         publish("listening", "Comando por F8")
         print("[F8] Di ahora tu orden, sin decir Hover.",flush=True)
 
+    def _ask_name(self, kind):
+        if kind not in ("txt","excel","folder","repo"):
+            return
+        self.pending_kind = kind
+        self.pending_until = self.clock()+45.0
+        prompt = "Dime SOLO el nombre para "+("repositorio privado" if kind=="repo" else kind)
+        print("[dialogo]",prompt,flush=True)
+        publish("listening",prompt,3)
+
+    def _handle_name(self, spoken):
+        from .spoken_names import spoken_name
+        from .wake import normalize_speech
+        clean = normalize_speech(spoken)
+        if clean in ("cancela","cancelar","no","olvidalo","cancelalo"):
+            self.pending_kind=""
+            publish("ok","Solicitud cancelada")
+            print("[dialogo] Cancelado por voz.",flush=True)
+            return "cancel"
+        kind=self.pending_kind
+        name=spoken_name(spoken,kind)
+        if not name:
+            print("[dialogo] Nombre poco claro; sigo esperando un nombre corto.",flush=True)
+            publish("listening","Repite solo el nombre",3)
+            return "waiting"
+        self.pending_kind=""
+        if kind=="repo":
+            command=f"crea un repositorio privado llamado {name}"
+        elif kind=="folder":
+            command=f"crea una subcarpeta llamada {name}"
+        elif kind=="excel":
+            command=f"en la carpeta favorita crea un Excel llamado {name}"
+        else:
+            command=f"en la carpeta favorita crea un TXT llamado {name}"
+        print("[dialogo] Nombre dictado:",name,"| Acción:",kind,flush=True)
+        return self._command(command)
+
     def process(self, spoken: str):
-        spoken = spoken.strip()
+        spoken=spoken.strip()
         if not spoken:
             return "silence"
-        now = self.clock()
+        now=self.clock()
         print("[voz]",spoken,flush=True)
+        from .wake import normalize_speech
+        normalized=normalize_speech(spoken)
+        remainder=extract_wake(spoken)
+        if self.pending_kind and now>=self.pending_until:
+            self.pending_kind=""
+        if self.dictation_provider and now>=self.dictation_until:
+            self.dictation_provider=""
 
-        # Any new explicit wake phrase can override an unfinished dictation.
-        remainder = extract_wake(spoken)
+        # A wake phrase can start another command even during a pending name.
         if remainder is not None:
-            self.dictation_provider = ""
-            self.ptt_until = 0
+            self.ptt_until=0.0
+            self.dictation_provider=""
             if not remainder:
-                self.command_until = now + 12.0
-                publish("listening", "Te escucho")
+                self.command_until=now+12.0
+                self.recent_until=now+45.0
+                publish("listening","Te escucho")
                 print("[wake] HOVER detectado. Di tu orden.",flush=True)
                 return "wake"
-            self.command_until = 0.0
+            parsed=parse(remainder)
+            if self.pending_kind and parsed.action=="unknown":
+                return self._handle_name(remainder)
+            self.pending_kind=""
+            self.command_until=0.0
             return self._command(remainder)
 
-        if self.dictation_provider and now < self.dictation_until:
-            provider = self.dictation_provider
-            self.dictation_provider = ""
-            if spoken.casefold().strip(" .!?") in ("cancela","cancelar","no enviar"):
-                publish("ok", "Dictado cancelado")
+        # HOVER prompted for this slot; don't require the wake phrase again.
+        if self.pending_kind and now<self.pending_until:
+            # A full safe command overrides a pending name only when wake
+            # is explicit, otherwise don't trust unattended background speech.
+            return self._handle_name(spoken)
+
+        if self.dictation_provider and now<self.dictation_until:
+            provider=self.dictation_provider
+            self.dictation_provider=""
+            if normalized in ("cancela","cancelar","no enviar"):
+                publish("ok","Dictado cancelado")
                 return "cancel"
             return self.send_dictated(provider,spoken)
 
-        if now < self.command_until or now < self.ptt_until:
-            from .wake import normalize_speech
-            filler = normalize_speech(spoken)
-            if filler in ("oye", "hey", "si", "ok", "hola", "hover"):
-                # A filler is not a complete command. Remain ready for the next phrase.
-                self.command_until = max(self.command_until, now + 8.0)
+        # Voice-session context allows "Reprodúcelo" after opening Spotify,
+        # without permanently listening for arbitrary unlabeled commands.
+        if (now<self.recent_until
+                and self.recent_action in ("spotify_play","spotify_resume")
+                and normalized in ("reproducelo","ponlo","dale play",
+                                   "reanuda","reproduce","dale reproducir")):
+            return self._command("reproducelo")
+
+        if now<self.command_until or now<self.ptt_until:
+            if normalized in ("oye","hey","si","ok","hola","hover"):
+                self.command_until=max(self.command_until,now+8.0)
                 print("[listening] Espero la orden completa.",flush=True)
                 return "waiting"
-            self.command_until = self.ptt_until = 0.0
+            self.command_until=self.ptt_until=0.0
             return self._command(spoken)
+
+        # Whisper sometimes drops "Hover" but retains "Oye". Permit only
+        # explicit low-risk follow-up commands inside a recent HOVER dialogue.
+        if now<self.recent_until and normalized.startswith("oye "):
+            candidate=normalized[4:].strip()
+            intent=parse(candidate)
+            allow={"local_name_needed","create_local","google_search",
+                   "google_app","windows_app","office_new","open_link",
+                   "media_key","spotify_play","spotify_resume","open_site"}
+            if intent.action in allow:
+                print("[dialogo] Orden de seguimiento con 'Oye':",candidate,flush=True)
+                return self._command(candidate)
 
         print("[idle] No se reconocio el nombre Hover. Prueba F8.",flush=True)
         return "ignored"
 
-    def _command(self, utterance):
-        command = parse(utterance)
-        if command.action == "unknown":
-            publish("error", "Orden no reconocida: "+utterance[:50])
+    def _command(self,utterance):
+        command=parse(utterance)
+        if command.action=="unknown":
+            publish("error","Orden no reconocida: "+utterance[:50])
             print("[accion] Sin coincidencia:",utterance,flush=True)
             return "unknown"
         print("[accion]",command.action,command.args,flush=True)
-        result = self.execute(utterance)
-        if result is not None and command.action == "chat_prepare":
-            self.dictation_provider = command.provider
-            self.dictation_until = self.clock()+65.0
+        # The ASR sometimes says "que ya me" or "que llame" for a repo name.
+        # Do not create a possibly misnamed repo. Ask for the name alone.
+        from .wake import normalize_speech
+        sentence=normalize_speech(utterance)
+        if (command.action=="create_private_repo" and
+                ("que ya me" in sentence or "que llame " in sentence)):
+            self._ask_name("repo")
+            return "waiting"
+
+        result=self.execute(utterance)
+        if result is None:
+            return "failed"
+        self.recent_until=self.clock()+45.0
+        self.recent_action=command.action
+        if command.action=="chat_prepare":
+            self.dictation_provider=command.provider
+            self.dictation_until=self.clock()+65.0
             publish("listening","Dicta tu mensaje para "+command.provider)
             print("[dictado] Di tu mensaje ahora; no necesitas Hover.",flush=True)
-        return "action" if result is not None else "failed"
+        elif command.action=="repo_name_needed":
+            self._ask_name("repo")
+        elif command.action=="local_name_needed":
+            self._ask_name(command.args.get("kind","txt"))
+        return "action"
 
 
 def mic_test(device=None, threshold=0.0008, seconds=12.0):
