@@ -64,6 +64,18 @@ class ActionUnavailable(RuntimeError):
     pass
 
 
+def search_google(query: str) -> str:
+    """Search safely in the default browser. No inferred query from noise."""
+    from urllib.parse import quote_plus
+    q = " ".join(str(query).split())
+    if not 2 <= len(q) <= 180:
+        raise ActionUnavailable("La busqueda necesita un texto claro.")
+    url = "https://www.google.com/search?q=" + quote_plus(q, safe="")
+    if not webbrowser.open_new_tab(url):
+        raise ActionUnavailable("No pude abrir los resultados de Google.")
+    return f"Buscando en Google: {q}"
+
+
 def open_google(service: str) -> str:
     url = GOOGLE_URLS.get(service)
     if not url:
