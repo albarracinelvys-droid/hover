@@ -266,6 +266,17 @@ def run(executor, *, engine="auto", model="small",
                     samples = work_queue.get(timeout=0.2)
                 except Empty:
                     continue
+                if isinstance(samples,tuple) and len(samples)==3 and samples[0]=="google":
+                    try:
+                        from .google_ipc import execute_control
+                        result=execute_control(samples[1],samples[2])
+                        print("[google]",result,flush=True)
+                    except Exception as exc:
+                        print("[google] Error de autorización:",type(exc).__name__,str(exc),flush=True)
+                        publish("error","Google: revisa la conexión OAuth.")
+                    finally:
+                        work_queue.task_done()
+                    continue
                 print(f"[asr] Transcribiendo {len(samples)/16000:.1f}s con {recognizer.name}",flush=True)
                 try:
                     text = recognizer.transcribe(normalize_audio(samples))
@@ -319,11 +330,28 @@ def run(executor, *, engine="auto", model="small",
           "Sin voz, sin pitidos.",flush=True)
     print("[ready] El reconocimiento transcurre en paralelo al microfono.",flush=True)
     last_meter=time.monotonic()
+    last_google_poll=0.0
+    try:
+        from .google_ipc import write_status
+        write_status("HOVER escuchando. Gestiona Google desde Atajos.")
+    except OSError:
+        pass
     f8_was_down=False
     try:
         with sd.InputStream(samplerate=sample_rate,device=device,channels=1,
                             blocksize=input_frames,dtype="float32",callback=callback):
             while not stop.is_set():
+                now=time.monotonic()
+                if now-last_google_poll>=0.8:
+                    last_google_poll=now
+                    from .google_ipc import poll_control
+                    job=poll_control()
+                    if job:
+                        try:
+                            work_queue.put_nowait(("google",job[0],job[1]))
+                            publish("thinking","Google: "+job[0]+" "+job[1],3)
+                        except Full:
+                            publish("error","Google: cola ocupada; reintenta.",3)
                 f8_down=_hotkey_pressed()
                 if f8_down and not f8_was_down:
                     dialogue.press_hotkey()
