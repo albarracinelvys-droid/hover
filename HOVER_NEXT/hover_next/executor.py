@@ -49,6 +49,50 @@ def confirm_intent(intent: Intent) -> bool:
         return typed == name
     return input('¿Ejecutar esta accion? escribe SI: ').strip().upper()=='SI'
 
+def confirm_voice_intent(intent: Intent) -> bool:
+    """Confirmation for voice commands: never read from stdin in the ASR worker.
+
+    Routine queries and chat prompts have requires_confirmation=False.
+    Actions that change repositories or files display a native, visible
+    Windows dialog. A missing UI fails closed rather than silently executing.
+    """
+    if not intent.requires_confirmation:
+        return True
+    if sys.platform != "win32":
+        print("[confirmacion] El modo voz necesita una ventana de Windows.",flush=True)
+        return False
+    import ctypes
+    action = intent.action
+    detail = intent.args.get("name") or intent.args.get("filename") or ""
+    if action == "create_private_repo":
+        question = (
+            f"Se creará un repositorio PRIVADO en GitHub.\\n\\n"
+            f"Nombre reconocido: {detail}\\n\\n"
+            "Comprueba que esté escrito EXACTAMENTE como quieres.\\n"
+            "¿Autorizar su creación?"
+        )
+    else:
+        question = (
+            f"Acción: {action}\\nDatos: {intent.args}\\n\\n"
+            "¿Autorizar la operación?"
+        )
+    question = question.replace("\\n", "\n")
+    print(f"[confirmacion] Ventana de Windows para: {action} {detail}",flush=True)
+    # MessageBoxW MB_YESNO | MB_ICONWARNING | MB_SYSTEMMODAL | MB_TOPMOST.
+    user32 = ctypes.windll.user32
+    user32.MessageBoxW.argtypes = [ctypes.c_void_p,ctypes.c_wchar_p,
+                                    ctypes.c_wchar_p,ctypes.c_uint]
+    user32.MessageBoxW.restype = ctypes.c_int
+    try:
+        answer = user32.MessageBoxW(
+            None, question, "HOVER - Confirmación", 0x00000004 | 0x00000030 | 0x00001000 | 0x00040000
+        )
+        return answer == 6  # IDYES
+    except (OSError,AttributeError) as exc:
+        print("[confirmacion] No fue posible mostrar el dialogo:",exc,flush=True)
+        return False
+
+
 class Executor:
     def __init__(self, config_path: Path | None = None, browser: BrowserBridge | None = None):
         self.path=config_path or app_dir() / 'config.json'
