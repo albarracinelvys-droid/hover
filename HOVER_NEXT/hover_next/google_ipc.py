@@ -68,7 +68,14 @@ def execute_control(action,service):
             existing_email=(google_auth.account_email(already[0]).casefold()
                             if already else "")
             google_auth.connect(key)
-            new_email=google_auth.account_email(key).casefold()
+            try:
+                new_email=google_auth.account_email(key).casefold()
+            except Exception:
+                # A token without verified account identity cannot be used
+                # in an integration that promises one consistent account.
+                google_auth.disconnect(key)
+                raise google_auth.GoogleAuthError(
+                    "Google no pudo verificar la identidad de esta cuenta.")
             if not new_email or (existing_email and new_email!=existing_email):
                 google_auth.disconnect(key)
                 raise google_auth.GoogleAuthError(
