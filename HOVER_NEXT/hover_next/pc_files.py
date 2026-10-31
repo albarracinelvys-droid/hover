@@ -1,6 +1,6 @@
-"""Deterministic, user-confirmed file operations for HOVER on Windows.
+"""Deterministic, scoped file operations for HOVER on Windows.
 
-No shell execution, recursion, arbitrary paths, overwrites, or implicit deletion.
+No shell execution, recursion, arbitrary paths, overwrites, or permanent deletion.
 Only the current user's Desktop, Downloads, Documents and selected favorite folder.
 """
 from __future__ import annotations
@@ -123,7 +123,50 @@ def prepare_transfer(args: dict, config: dict) -> dict:
     return result
 
 
+def prepare_delete(args: dict, config: dict) -> dict:
+    """Freeze the target before asking for a separate spoken confirmation.
+
+    Only files directly inside an explicitly named user folder are accepted.
+    Directory trees and symlinks are never deleted by a voice command.
+    """
+    folder=location(args["location"],config)
+    if args.get("pick")=="latest":
+        source=_latest(folder,args.get("kind","any"))
+    elif args.get("pick")=="name":
+        source=_direct_child(folder,args["name"],files_only=True)
+    else:
+        raise PCFileError("Debes identificar un archivo concreto.")
+    stat=source.stat()
+    return {"pick":"name","location":args["location"],
+            "name":source.name,"size":str(stat.st_size),
+            "mtime_ns":str(stat.st_mtime_ns)}
+
+
 def perform(action: str, args: dict, config: dict) -> str:
+    if action == "pc_delete":
+        # Only run after VoiceDialogue receives an unambiguous spoken "sí"
+        # for a specific snapshot and the executor marks it confirmed.
+        if (args.get("pick")!="name" or
+                "size" not in args or "mtime_ns" not in args):
+            raise PCFileError("Falta la selección verificada del archivo.")
+        folder=location(args["location"],config)
+        source=_direct_child(folder,args["name"],files_only=True)
+        now=source.stat()
+        if (str(now.st_size)!=args["size"] or
+                str(now.st_mtime_ns)!=args["mtime_ns"]):
+            raise PCFileError("El archivo cambió desde la confirmación. No lo eliminé.")
+        try:
+            from send2trash import send2trash
+        except ImportError as exc:
+            raise PCFileError(
+                "Falta Send2Trash. Instálalo con pip install -r requirements.txt."
+            ) from exc
+        try:
+            send2trash(str(source))
+        except OSError as exc:
+            raise PCFileError("Windows no pudo enviar el archivo a la Papelera.") from exc
+        return f"Envié {source.name} a la Papelera de reciclaje de Windows."
+
     if action == "pc_transfer":
         source_folder=location(args["from"],config)
         destination_folder=location(args["to"],config)
