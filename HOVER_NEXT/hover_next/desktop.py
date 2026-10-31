@@ -34,6 +34,32 @@ GOOGLE_URLS: dict[str, str] = {
 }
 DOCUMENT_TYPES = {".docx", ".xlsx", ".pptx", ".pdf", ".txt", ".csv", ".odt", ".ods", ".odp"}
 
+SITE_URLS: dict[str,str] = {
+    "github": "https://github.com/",
+    "whatsapp": "https://web.whatsapp.com/",
+    "google_translate": "https://translate.google.com/",
+    "outlook": "https://outlook.live.com/mail/",
+    "onedrive": "https://onedrive.live.com/",
+    "discord": "https://discord.com/app",
+    "linkedin": "https://www.linkedin.com/",
+    "notion": "https://www.notion.so/",
+    "canva": "https://www.canva.com/",
+    "vercel": "https://vercel.com/dashboard",
+    "gemini": "https://gemini.google.com/app",
+    "perplexity": "https://www.perplexity.ai/",
+    "stackoverflow": "https://stackoverflow.com/",
+}
+
+def open_site_shortcut(site: str) -> str:
+    url = SITE_URLS.get(site)
+    if url is None:
+        raise ActionUnavailable("Destino web no autorizado.")
+    if not webbrowser.open_new_tab(url):
+        raise ActionUnavailable(f"El navegador no aceptó la solicitud para {site}.")
+    return f"Abriendo {site} en tu navegador."
+
+
+
 class ActionUnavailable(RuntimeError):
     pass
 
@@ -51,17 +77,28 @@ def open_windows_app(app: str) -> str:
     if sys.platform != "win32":
         raise ActionUnavailable("Esta acción requiere Windows.")
     allowed = {
-        "calculator": "calc.exe",
-        "notepad": "notepad.exe",
-        "paint": "mspaint.exe",
-        "explorer": "explorer.exe",
+        "calculator": ["calc.exe"],
+        "notepad": ["notepad.exe"],
+        "paint": ["mspaint.exe"],
+        "explorer": ["explorer.exe"],
+        "task_manager": ["taskmgr.exe"],
+        "terminal": ["cmd.exe"],
+        "downloads": ["explorer.exe","shell:Downloads"],
+        "documents": ["explorer.exe","shell:Personal"],
     }
-    executable = allowed.get(app)
-    if executable is None:
+    if app == "settings":
+        os.startfile("ms-settings:")
+        return "Configuración de Windows solicitada."
+    command = allowed.get(app)
+    if command is None:
         raise ActionUnavailable("Aplicación no permitida.")
-    subprocess.Popen([executable], shell=False)
-    return {"calculator":"Calculadora abierta.", "notepad":"Bloc de notas abierto.",
-            "paint":"Paint abierto.", "explorer":"Explorador abierto."}[app]
+    subprocess.Popen(command, shell=False)
+    labels = {"calculator":"Calculadora abierta.","notepad":"Bloc de notas abierto.",
+              "paint":"Paint abierto.","explorer":"Explorador abierto.",
+              "task_manager":"Abriendo el Administrador de tareas.",
+              "terminal":"Abriendo la terminal de Windows.",
+              "downloads":"Abriendo Descargas.","documents":"Abriendo Documentos."}
+    return labels[app]
 
 
 def new_office_document(kind: str) -> str:
