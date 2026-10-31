@@ -44,6 +44,13 @@ if not exist ".venv\Scripts\python.exe" (
     pause
     exit /b 2
 )
+echo Preparando las dependencias locales de HOVER...
+".venv\Scripts\python.exe" -m pip install -r requirements.txt
+if errorlevel 1 (
+    echo ERROR: No se pudieron instalar las dependencias de HOVER.
+    pause
+    exit /b 2
+)
 ".venv\Scripts\python.exe" -m hover_next.nlu_check
 set "CODE=%ERRORLEVEL%"
 if not "%CODE%"=="0" (
