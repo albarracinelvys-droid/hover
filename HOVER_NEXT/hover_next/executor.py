@@ -161,17 +161,24 @@ class Executor:
                     f"con {target}. {result}")
         if action == 'google_search':
             from .desktop import search_google
-            # User opted in: consult linked Google account first, locally.
-            # Public Google search still opens in the default browser.
+            # Every public query checks connected account services as requested,
+            # but NEVER transfers personal results to public Google Search.
             from .google_auth import status
+            matched=[]
             if any(status().values()):
-                    try:
-                        from .google_workspace import search_all
-                        personal,errors=search_all(intent.args["query"])
-                        print(f"[google-cuenta] Coincidencias de mi cuenta: {len(personal)}",flush=True)
-                    except Exception as exc:
-                        print("[google-cuenta] Consulta privada no disponible:",type(exc).__name__,flush=True)
-            return search_google(intent.args['query'])
+                try:
+                    from .google_workspace import search_all,format_results
+                    matched,errors=search_all(intent.args["query"])
+                    print("[google-cuenta] "+format_results(matched),flush=True)
+                    for warning in errors:
+                        print("[google-cuenta] "+warning,flush=True)
+                except Exception as exc:
+                    print("[google-cuenta] Consulta privada no disponible:",
+                          type(exc).__name__,flush=True)
+            public=search_google(intent.args['query'])
+            return public+(
+                f" | También encontré {len(matched)} coincidencias en tu cuenta Google."
+                if matched else "")
         if action == 'google_translate':
             from .desktop import translate_google
             return translate_google(intent.args.get('text',''),
