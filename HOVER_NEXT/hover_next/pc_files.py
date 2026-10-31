@@ -248,47 +248,140 @@ def create_saved_file(folder: Path, kind: str, name: str) -> str:
     return f"Creé y guardé el archivo {target}."
 
 
+def _safe_window_info(win32gui, hwnd):
+    """Only visible, titled, non-shell and non-HOVER top-level windows."""
+    if not hwnd or not win32gui.IsWindowVisible(hwnd):
+        return None
+    title=win32gui.GetWindowText(hwnd).strip()
+    clazz=win32gui.GetClassName(hwnd)
+    if (not title or clazz in {"Progman","WorkerW","Shell_TrayWnd",
+                                "DV2ControlHost"} or "HOVER" in title.upper()
+            or title.casefold() in ("program manager","administrador de tareas")):
+        return None
+    return clazz,title
+
+
+def _app_window_matches(app, clazz, title):
+    """Strict identity checks to avoid closing an unrelated application."""
+    title=title.casefold()
+    if app in ("explorer","downloads","documents"):
+        return clazz in ("CabinetWClass","ExploreWClass")
+    classes={
+        "excel":("XLMAIN",),
+        "word":("OpusApp",),
+        "powerpoint":("PPTFrameClass",),
+        "calculator":("ApplicationFrameWindow","CalcFrame"),
+        "notepad":("Notepad","Chrome_WidgetWin_1"),
+        "paint":("MSPaintApp","Chrome_WidgetWin_1"),
+        "vscode":("Chrome_WidgetWin_1",),
+        "terminal":("ConsoleWindowClass","CASCADIA_HOSTING_WINDOW_CLASS"),
+        "task_manager":("TaskManagerWindow",),
+    }
+    tokens={
+        "excel":("excel",),
+        "word":("word",),
+        "powerpoint":("powerpoint",),
+        "calculator":("calculadora","calculator"),
+        "notepad":("bloc de notas","notepad"),
+        "paint":("paint",),
+        "vscode":("visual studio code"," - code"),
+        "terminal":("terminal","powershell","símbolo del sistema","command prompt"),
+        "task_manager":("administrador de tareas","task manager"),
+    }
+    if app not in classes or clazz not in classes[app]:
+        return False
+    # The Win32 classes for Office are distinctive enough; modern UWP and
+    # Chromium classes are shared between applications and need title checks.
+    if app in ("excel","word","powerpoint"):
+        return True
+    return any(token in title for token in tokens[app])
+
+
+def _all_windows(win32gui):
+    handles=[]
+    win32gui.EnumWindows(lambda hwnd,_: handles.append(hwnd),None)
+    # EnumWindows lists windows from top to bottom Z order.
+    return handles
+
+
+def _specific_explorer_folder(win32gui, app, handles):
+    """Resolve an open Explorer directory, including OneDrive redirects.
+
+    Shell.Application reports the actual folder behind an Explorer tab.
+    Fallback title matching is limited to visible Explorer windows only.
+    """
+    target=_known_folder(app)
+    try:
+        import pythoncom
+        import win32com.client
+    except ImportError:
+        pythoncom=None
+    if pythoncom is not None:
+        pythoncom.CoInitialize()
+        try:
+            shell=win32com.client.Dispatch("Shell.Application")
+            for window in shell.Windows():
+                try:
+                    hwnd=int(window.HWND)
+                    info=_safe_window_info(win32gui,hwnd)
+                    if hwnd not in handles or not info or not _app_window_matches(
+                            "explorer",*info):
+                        continue
+                    raw=str(window.Document.Folder.Self.Path)
+                    if Path(raw).resolve(strict=False)==target:
+                        return hwnd
+                except (AttributeError,ValueError,TypeError,OSError):
+                    continue
+        except (OSError,AttributeError):
+            pass
+        finally:
+            pythoncom.CoUninitialize()
+    labels=(("descargas","downloads") if app=="downloads"
+            else ("documentos","documents"))
+    for hwnd in handles:
+        info=_safe_window_info(win32gui,hwnd)
+        if info and _app_window_matches("explorer",*info):
+            label=info[1].casefold().strip()
+            if label in labels or any(label.startswith(x+" - ") for x in labels):
+                return hwnd
+    raise PCFileError(
+        f"No encontré una ventana del Explorador abierta en {target}.")
+
+
 def close_foreground_window(app: str) -> str:
-    """Ask ONE active user window to close normally (WM_CLOSE), never kill it."""
+    """Close one matching user-facing window, even behind the notch/console.
+
+    A named app uses strict window classes; 'foreground' requires an active
+    non-shell window. Nothing kills explorer.exe or other processes.
+    """
     try:
         import win32gui
         import win32con
     except ImportError as exc:
         raise PCFileError("Para controlar ventanas en Windows se necesita pywin32.") from exc
-    hwnd=win32gui.GetForegroundWindow()
-    if not hwnd or not win32gui.IsWindowVisible(hwnd):
-        raise PCFileError("No hay una ventana activa que pueda cerrar.")
+
+    current=win32gui.GetForegroundWindow()
+    if app=="foreground":
+        info=_safe_window_info(win32gui,current)
+        if info is None:
+            raise PCFileError("No hay una ventana activa segura que pueda cerrar.")
+        hwnd=current
+    else:
+        handles=_all_windows(win32gui)
+        if app in ("downloads","documents"):
+            hwnd=_specific_explorer_folder(win32gui,app,handles)
+        else:
+            candidates=[h for h in handles if
+                        (info:=_safe_window_info(win32gui,h)) is not None
+                        and _app_window_matches(app,*info)]
+            if not candidates:
+                raise PCFileError(f"No encontré una ventana abierta de {app}.")
+            hwnd=current if current in candidates else candidates[0]
+
     title=win32gui.GetWindowText(hwnd).strip()
-    clazz=win32gui.GetClassName(hwnd)
-    # Never close the shell, invisible windows, elevated system dialogs or
-    # HOVER itself by an uncertain Whisper transcription.
-    blocked={"Progman","WorkerW","Shell_TrayWnd","DV2ControlHost"}
-    if (not title or clazz in blocked or "HOVER" in title.upper()
-            or title.casefold() in ("program manager","administrador de tareas")):
-        raise PCFileError("Esa ventana está protegida. No la cerré.")
-    expected={
-        "excel":("XLMAIN","excel"),
-        "word":("OpusApp","word"),
-        "powerpoint":("PPTFrameClass","powerpoint"),
-        "calculator":("ApplicationFrameWindow","calculadora"),
-        "notepad":("Notepad","bloc de notas"),
-        "paint":("MSPaintApp","paint"),
-        "explorer":("CabinetWClass","explorador de archivos"),
-        "vscode":("Chrome_WidgetWin_1","visual studio code"),
-        "terminal":("ConsoleWindowClass","terminal"),
-        "task_manager":("TaskManagerWindow","administrador de tareas"),
-    }
-    if app!="foreground":
-        if app not in expected:
-            raise PCFileError("Solo cierro aplicaciones conocidas al frente.")
-        window_class, label=expected[app]
-        if clazz!=window_class and label not in title.casefold():
-            raise PCFileError(
-                f"La ventana activa no corresponde a {app}. No cerré otra aplicación.")
-    # Windows WM_CLOSE is graceful: unsaved changes remain protected by the
-    # application's own confirmation; no TerminateProcess or taskkill is used.
     win32gui.PostMessage(hwnd,win32con.WM_CLOSE,0,0)
-    return f"Solicité cerrar la ventana activa: {title}. La aplicación puede pedir guardar cambios."
+    return (f"Solicité cerrar {title}. Windows puede pedir guardar cambios "
+            "antes de cerrar la ventana.")
 
 
 def perform(action: str, args: dict, config: dict) -> str:
