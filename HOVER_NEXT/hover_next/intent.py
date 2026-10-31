@@ -32,6 +32,19 @@ def identify_provider(t: str) -> str:
 def parse(text: str) -> Intent:
     spoken_command = extract_wake(text)
     t = spoken_command if spoken_command is not None else normalize(text)
+    # The simple assistant routes named apps and chat dictation before legacy tools.
+    from .chat_command import parse_chat_request
+    from .direct_commands import parse_direct
+    req = parse_chat_request(text)
+    if req is not None:
+        return Intent(
+            "chat_compose" if req.prompt else "chat_prepare",
+            provider=req.provider,
+            args={"project": req.project, "prompt": req.prompt},
+        )
+    direct = parse_direct(t)
+    if direct is not None:
+        return direct
     provider = identify_provider(t)
     if re.search(r'\b(crea|crear)\s+(?:un\s+)?(?:nuevo\s+)?repo(?:sitorio)?\s+(?:en\s+github\s+)?(?:privado\s+)?(?:llamado|que\s+se\s+llame)\s+([\w.-]+)', t):
         name = re.search(r'(?:llamado|que\s+se\s+llame)\s+([\w.-]+)', t).group(1)
@@ -65,15 +78,8 @@ def parse(text: str) -> Intent:
         return Intent('show_pc')
     if re.search(r'\b(captura de pantalla|captura la pantalla|screenshot|recorte)\b',t):
         return Intent('screenshot')
-    # Coucou-style AI routing: natural questions get a read-only agent,
-    # edits are only performed inside a configured workspace after confirmation.
-    if re.match(r'^(?:usa|con|pide(?:le)? a)\s+(?:codex|claude code)\b', t):
-        task=re.sub(r'^(?:usa|con|pide(?:le)? a)\s+(?:codex|claude code)\s*', '',t).strip()
-        if re.match(r'^(?:crea|crear|modifica|modificar|edita|implementa|programa|desarrolla|corrige)\b',task):
-            return Intent('agent_task',args={'prompt':task},requires_confirmation=True)
-        return Intent('agent_ask',args={'prompt':task or t})
-    if re.match(r'^(?:crea|crear|programa|desarrolla|implementa|modifica|corrige|genera)\b',t):
-        return Intent('agent_task',args={'prompt':t},requires_confirmation=True)
-    if re.match(r'^(?:explica|analiza|investiga|resume|resuelve|dime|cuanto|cuantos|que es|como|por que|puedes explicar|ayudame a entender)\b',t):
-        return Intent('agent_ask',args={'prompt':t})
+    # Optional expert tools are explicit; no automatic Codex for everyday commands.
+    if re.match(r'^(?:usa|con)\s+codex\b',t):
+        task=re.sub(r'^(?:usa|con)\s+codex\s*','',t).strip()
+        return Intent('agent_ask',args={'prompt':task}) if task else Intent('unknown')
     return Intent('unknown')
