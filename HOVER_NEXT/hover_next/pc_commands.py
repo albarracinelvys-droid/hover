@@ -31,6 +31,68 @@ def _where(t):
 def parse_pc_command(text: str):
     """Return (action,args) for a bounded file command, or None."""
     t=_clean(text)
+    # Explicit foreground-window operations only. No killing processes or
+    # accidentally closing arbitrary background/system applications.
+    close = re.fullmatch(
+        r"(?:cierra|cerrar|cierra(?:me)?|cerrame|termina)\s+"
+        r"(?:(?:la|el|mi)\s+)?"
+        r"(ventana actual|ventana activa|esta ventana|programa actual|"
+        r"aplicacion actual|aplicacion activa|esto|"
+        r"excel|word|powerpoint|power point|calculadora|"
+        r"bloc de notas|notepad|paint|explorador(?: de archivos)?)",
+        t)
+    if close:
+        name=close.group(1)
+        aliases={
+            "excel":"excel","word":"word","powerpoint":"powerpoint",
+            "power point":"powerpoint","calculadora":"calculator",
+            "bloc de notas":"notepad","notepad":"notepad",
+            "paint":"paint","explorador":"explorer",
+            "explorador de archivos":"explorer",
+        }
+        return "pc_close_window", {"app":aliases.get(name,"foreground")}
+
+    # Create an actual saved file, not just a new unsaved Office window.
+    # Missing location defaults to the user's Desktop; never system paths.
+    # Requiring a recognizable kind + name avoids treating general questions
+    # or ambiguous ASR fragments as file-system mutations.
+    creation = re.fullmatch(
+        r"(?:crea|crear|creame|genera|generar|haz|hacer)\s+"
+        r"(?:(?:un|una)\s+)?(?:(?:nueva|nuevo)\s+)?"
+        r"(carpeta|subcarpeta|archivo de texto|archivo de excel|"
+        r"archivo excel|archivo de word|archivo word|"
+        r"documento de word|documento word|archivo csv|"
+        r"archivo txt|txt|excel|word|xlsx|docx|csv|"
+        r"hoja de calculo|libro de excel|documento de texto)\s+"
+        r"(?:(?:que\s+se\s+llam[ae]|llamad[oa]|"
+        r"con\s+(?:el\s+)?nombre(?:\s+de)?|de\s+nombre)\s+)?"
+        r"(.+?)"
+        r"(?:\s+(?:en|dentro\s+de)\s+(?:(?:el|la|mi)\s+)?"
+        r"(?:carpeta\s+de\s+)?"+LOC+r")?",
+        t)
+    if creation:
+        kind, name, where=creation.groups()
+        kind_map={
+            "carpeta":"folder","subcarpeta":"folder",
+            "archivo de texto":"text","documento de texto":"text",
+            "archivo txt":"text","txt":"text",
+            "excel":"excel","archivo de excel":"excel",
+            "archivo excel":"excel","xlsx":"excel",
+            "hoja de calculo":"excel","libro de excel":"excel",
+            "word":"word","archivo de word":"word",
+            "archivo word":"word","documento word":"word",
+            "documento de word":"word","docx":"word",
+            "csv":"csv","archivo csv":"csv",
+        }
+        # Slashes, drive letters, wildcards and executable suffixes are
+        # rejected by the storage layer as an additional invariant.
+        name=name.strip(" .,")
+        if name and len(name)<=100:
+            return "pc_create",{
+                "kind":kind_map[kind],"name":name,
+                "location":_where(where) if where else "desktop"
+            }
+
     # "Oye, puedes mover el último comprimido de descargas a escritorio."
     # The complete pattern is assembled here to avoid ambiguous free-form
     # path extraction. No shell paths or recursively searched files.
