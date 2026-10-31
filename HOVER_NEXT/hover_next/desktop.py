@@ -201,6 +201,33 @@ def open_document(name: str = "") -> str:
     return f"Documento abierto: {target.name}"
 
 
+def send_media_key(key: str) -> str:
+    """Send a Windows global media key. Does not select a particular player."""
+    if sys.platform != "win32":
+        raise ActionUnavailable("Controles multimedia disponibles en Windows.")
+    keys = {
+        "play_pause":0xB3, "next":0xB0, "previous":0xB1,
+        "volume_mute":0xAD, "volume_down":0xAE, "volume_up":0xAF,
+    }
+    vk = keys.get(key)
+    if vk is None:
+        raise ActionUnavailable("Comando multimedia no permitido.")
+    import ctypes
+    user32 = ctypes.windll.user32
+    for _ in range(3 if key in ("volume_down", "volume_up") else 1):
+        user32.keybd_event(vk, 0, 0, 0)
+        user32.keybd_event(vk, 0, 2, 0)
+    messages = {
+        "play_pause":"Envié reproducir/pausar al reproductor multimedia activo.",
+        "next":"Envié siguiente pista al reproductor activo.",
+        "previous":"Envié pista anterior al reproductor activo.",
+        "volume_mute":"Alterné silencio de Windows.",
+        "volume_up":"Solicité subir el volumen de Windows.",
+        "volume_down":"Solicité bajar el volumen de Windows.",
+    }
+    return messages[key]
+
+
 def _foreground_is_google_browser() -> bool:
     """Check title and executable; never send Ctrl+W to an arbitrary app."""
     if sys.platform != "win32":
