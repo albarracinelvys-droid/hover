@@ -2339,8 +2339,11 @@ void Animate(HWND hwnd){
     // The eye-grip keeps the island expanded while it is physically dragged.
     // Audio/voice status never causes the panel to expand by itself.
     if(g_eyeGripDrag) {
-        if((GetAsyncKeyState(VK_LBUTTON)&0x8000)==0) {
-            // Release can be swallowed by Windows for a layered window.
+        if(!g_hookGripActive.load() &&
+           (GetAsyncKeyState(VK_LBUTTON)&0x8000)==0) {
+            // When the low-level hook intentionally swallows mouse-down,
+            // GetAsyncKeyState is not authoritative. Wait for kEyeGripEnd.
+            // Normal Win32 clicks still use the old physical-button fallback.
             // Commit the location rather than silently discarding the drag.
             FinishEyeGrip(hwnd);
             g_drag=false;
