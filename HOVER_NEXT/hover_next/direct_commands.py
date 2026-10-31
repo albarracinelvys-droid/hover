@@ -38,16 +38,11 @@ def parse_direct(text: str) -> Intent | None:
     if _contains(t, "powerpoint", "power point", "microsoft powerpoint"):
         return Intent("office_new", args={"kind": "powerpoint"})
 
-    # A generic "Google" tab is not the same as Drive or Docs.
-    # Match the whole provider name, not any phrase that merely mentions Google.
-    if (re.search(r'\b(?:abre|abrir|muestra|crea)\b',t) and
-            re.search(r'\b(?:nueva?\s+pestana\s+de\s+)?google\b',t) and
-            not any(x in t for x in (
-                'google drive','google docs','google maps','google meet',
-                'google keep','google sheets','google calendar','google fotos',
-                'google translate','google slides','google gmail','google document'
-            )) and
-            not any(x in t for x in ('proyecto','chatgpt','claude','gmail'))):
+    # Google homepage requires an explicit request for that homepage;
+    # "crea un documento de Google" must still resolve to Google Docs.
+    if re.fullmatch(
+        r"(?:abre|abrir|muestra)\s+(?:(?:una|otra)\s+)?"
+        r"(?:(?:nueva|nuevo)\s+pestana\s+de\s+)?google", t):
         return Intent("google_app",args={"service":"google_home"})
     if _contains(t, "calculadora", "calculator", "calc"):
         return Intent("windows_app", args={"app": "calculator"})
