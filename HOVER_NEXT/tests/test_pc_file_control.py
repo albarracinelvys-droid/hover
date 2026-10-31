@@ -63,7 +63,8 @@ class SpokenPCCommands(unittest.TestCase):
 
     def test_oye_followup_stays_on_pc(self):
         commands=[]
-        dialogue=VoiceDialogue(commands.append,lambda *args:None,clock=lambda:100)
+        dialogue=VoiceDialogue(lambda command:(commands.append(command) or "ok"),
+                              lambda *args:None,clock=lambda:100)
         dialogue.recent_until=130
         self.assertEqual(
             dialogue.process("Oye, puedes mover el ultimo comprimido de descargas a escritorio"),
