@@ -59,8 +59,10 @@ def main():
     try:
         if args.voice:
             from .voice_coucou import run
+            preferred=executor.config.get("preferred_mic") if args.mic is None else args.mic
+            mic=int(preferred) if preferred is not None else None
             run(executor,engine=args.engine,model=args.model,
-                device=args.mic,threshold=args.threshold)
+                device=mic,threshold=args.threshold)
         elif args.text:
             run_one(args.text,executor)
         else:
