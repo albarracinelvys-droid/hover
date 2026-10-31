@@ -45,7 +45,7 @@ def _known_folder(name: str) -> Path:
         }
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
-            r"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders"
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
         ) as key:
             value, _ = winreg.QueryValueEx(key, reg_names[name])
         path = Path(os.path.expandvars(str(value))).expanduser()
@@ -185,7 +185,7 @@ def perform(action: str, args: dict, config: dict) -> str:
         if not text or len(text)>500:
             raise PCFileError("El texto dictado debe tener entre 1 y 500 caracteres.")
         with target.open("a",encoding="utf-8") as handle:
-            handle.write(text+"\\n")
+            handle.write(text+"\n")
         return f"Agregué texto al final de {target}. No se borró su contenido."
 
     raise PCFileError("Acción de archivos no admitida.")
