@@ -67,6 +67,23 @@ _TRANSLATE_PREFIX = re.compile(
 )
 
 
+
+def remove_wake_preserving_text(text: str) -> str | None:
+    """Strip a recognized wake prefix without removing C++, ñ or punctuation.
+
+    This is used only after HOVER's conservative wake detector accepts the
+    input. Otherwise no wake is implied by this helper alone.
+    """
+    match = re.match(
+        r"^\s*(?:(?:oye|oie|oi|hey|hola|huji|uji|huyi)"
+        r"[\s,.;:¿¡!?]*)?"
+        r"(?:hover|jover|over|llover|hober|huver|hoguer)\b"
+        r"[\s,.;:¿¡!?]*",
+        text, re.IGNORECASE,
+    )
+    return text[match.end():].strip() if match else None
+
+
 def information_request(utterance: str) -> tuple[str, dict[str, str]] | None:
     """Return a safe search/translation intent for a standalone utterance.
 
