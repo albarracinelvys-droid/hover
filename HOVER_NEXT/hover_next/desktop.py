@@ -76,6 +76,28 @@ def search_google(query: str) -> str:
     return f"Buscando en Google: {q}"
 
 
+def translate_google(text: str, target: str = "en") -> str:
+    """Open Google Translate with the recognized text and chosen language.
+
+    No local translation is fabricated. The user sees the result on Google.
+    """
+    from urllib.parse import urlencode
+    accepted = {"en","es","fr","de","pt","it","ja","zh-CN","ko","ru"}
+    if target not in accepted:
+        raise ActionUnavailable("Idioma de traducción no disponible.")
+    source = " ".join(str(text).split())
+    if len(source) > 180:
+        raise ActionUnavailable("La frase para traducir es demasiado larga.")
+    if source:
+        url = "https://translate.google.com/?" + urlencode(
+            {"sl":"auto", "tl":target, "text":source, "op":"translate"})
+    else:
+        url = "https://translate.google.com/?" + urlencode({"sl":"auto","tl":target})
+    if not webbrowser.open_new_tab(url):
+        raise ActionUnavailable("No pude abrir Google Traductor.")
+    return f"Google Traductor abierto para traducir: {source}" if source else "Google Traductor abierto."
+
+
 def open_google(service: str) -> str:
     url = GOOGLE_URLS.get(service)
     if not url:
