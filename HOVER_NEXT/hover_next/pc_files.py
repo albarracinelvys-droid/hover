@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 import re
 import shutil
+import threading
+import time
 
 from .local_files import safe_basename, selected_folder
 
@@ -26,6 +28,45 @@ KINDS = {
     "any": (),
 }
 MAX_TEXT_BYTES = 1024 * 1024
+# Track only a move completed in THIS HOVER process. Never infer a prior
+# move from a folder's modification times (OneDrive may reorder them).
+# The short history avoids deleting an unrelated old file after a restart.
+LAST_MOVE_MAX_AGE = 1800
+_LAST_MOVED = None
+_LAST_MOVE_LOCK = threading.Lock()
+
+
+def _remember_move(target: Path, location_key: str) -> None:
+    global _LAST_MOVED
+    stat=target.stat()
+    record={
+        "location":location_key,
+        "name":target.name,
+        "size":str(stat.st_size),
+        "mtime_ns":str(stat.st_mtime_ns),
+        "when":time.monotonic(),
+    }
+    with _LAST_MOVE_LOCK:
+        _LAST_MOVED=record
+
+
+def _recent_move(location_key: str) -> dict:
+    with _LAST_MOVE_LOCK:
+        record=dict(_LAST_MOVED) if _LAST_MOVED is not None else None
+    if (record is None or record["location"]!=location_key
+            or not (0 <= time.monotonic()-record["when"] <= LAST_MOVE_MAX_AGE)):
+        raise PCFileError(
+            "No hay un archivo movido recientemente por HOVER a esa carpeta "
+            "en esta sesión. No eliminé nada.")
+    return record
+
+
+def _forget_last_move(folder_key: str, name: str) -> None:
+    global _LAST_MOVED
+    with _LAST_MOVE_LOCK:
+        if (_LAST_MOVED and _LAST_MOVED["location"]==folder_key
+                and _LAST_MOVED["name"]==name):
+            _LAST_MOVED=None
 
 
 def _known_folder(name: str) -> Path:
@@ -130,7 +171,15 @@ def prepare_delete(args: dict, config: dict) -> dict:
     Directory trees and symlinks are never deleted by a voice command.
     """
     folder=location(args["location"],config)
-    if args.get("pick")=="latest":
+    if args.get("pick")=="last_moved":
+        # Only a completed HOVER move, not whatever file is most recent.
+        record=_recent_move(args["location"])
+        source=_direct_child(folder,record["name"],files_only=True)
+        stat=source.stat()
+        if (str(stat.st_size)!=record["size"] or
+                str(stat.st_mtime_ns)!=record["mtime_ns"]):
+            raise PCFileError("El archivo movido por HOVER cambió. No eliminé nada.")
+    elif args.get("pick")=="latest":
         source=_latest(folder,args.get("kind","any"))
     elif args.get("pick")=="name":
         source=_direct_child(folder,args["name"],files_only=True)
@@ -164,6 +213,7 @@ def perform(action: str, args: dict, config: dict) -> str:
             send2trash(str(source))
         except OSError as exc:
             raise PCFileError("Windows no pudo enviar el archivo a la Papelera.") from exc
+        _forget_last_move(args["location"],source.name)
         return f"Envié {source.name} a la Papelera de reciclaje de Windows."
 
     if action == "pc_transfer":
@@ -185,6 +235,14 @@ def perform(action: str, args: dict, config: dict) -> str:
         destination=_unique_destination(destination_folder,source.name)
         if args["operation"] == "move":
             shutil.move(str(source),str(destination))
+            try:
+                _remember_move(destination,args["to"])
+            except OSError:
+                # Moving succeeded; a journal failure must not claim failure
+                # or allow an unsafe "last moved" deletion afterwards.
+                with _LAST_MOVE_LOCK:
+                    global _LAST_MOVED
+                    _LAST_MOVED=None
             return f"Moví {source.name} de {source_folder} a {destination}."
         if args["operation"] == "copy":
             shutil.copy2(source,destination)
