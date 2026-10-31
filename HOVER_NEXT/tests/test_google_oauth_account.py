@@ -81,6 +81,11 @@ class OAuthLocalTests(unittest.TestCase):
         auth.disconnect("all")
         self.assertFalse(any(auth.status().values()))
 
+    def _mock_save_token(self, service, credentials):
+        path=auth._token_path(service)
+        path.parent.mkdir(parents=True,exist_ok=True)
+        path.write_bytes(b"SIMULATED-DPAPI-FILE")
+
     def test_install_flow_requests_exact_service_scopes(self):
         auth.CLIENT.write_text(
             '{"installed":{"client_id":"fake-client-id","client_secret":"not-real"}}',
@@ -89,7 +94,7 @@ class OAuthLocalTests(unittest.TestCase):
         fake_flow.run_local_server.return_value=MagicMock(
             to_json=lambda:'{"token":"private"}')
         with patch.object(auth,"sys") as sysfake, \
-             patch.object(auth,"_save") as save, \
+             patch.object(auth,"_save",side_effect=self._mock_save_token) as save, \
              patch.dict("sys.modules",{
                  "google_auth_oauthlib":MagicMock(),
                  "google_auth_oauthlib.flow":MagicMock(
@@ -113,7 +118,7 @@ class OAuthLocalTests(unittest.TestCase):
         fake_flow=MagicMock()
         factory=MagicMock(return_value=fake_flow)
         with patch.object(auth,"sys") as fake_sys, \
-             patch.object(auth,"_save"), \
+             patch.object(auth,"_save",side_effect=self._mock_save_token), \
              patch.dict("sys.modules",{
                  "google_auth_oauthlib":MagicMock(),
                  "google_auth_oauthlib.flow":MagicMock(
