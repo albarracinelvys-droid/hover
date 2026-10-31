@@ -53,6 +53,17 @@ def parse_pc_command(text: str):
             "from":_where(src),"to":_where(dest)
         }
 
+    # Whisper transcribes an imperative as "que elimina..." occasionally.
+    # This narrow grammar is for the LAST file HOVER actually moved, not
+    # the newest file on the target folder. Never guess based on timestamps.
+    moved=(r"(?:que\s+)?(?:elimina|eliminar|borra|borrar)\s+"
+           r"(?:el\s+)?(?:ultimo|ultima)\s+(?:archivo|fichero|documento)\s+"
+           r"(?:que\s+)?(?:movido|movida|moviste|trasladado|trasladada)\s+"
+           r"(?:a|al|hacia)\s+(?:(?:el|la|mi)\s+)?"+LOC)
+    m=re.fullmatch(moved,t)
+    if m:
+        return "pc_delete",{"pick":"last_moved","location":_where(m.group(1))}
+
     # Recycle Bin only: explicit local file deletion runs at once.
     # Ambiguous filenames, folders and system paths remain unsupported.
     delete_latest=(r"(?:elimina|eliminar|borra|borrar)\s+"
