@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from hover_next.intent import parse
 from hover_next import pc_files
@@ -71,6 +71,49 @@ class SpokenPCCommands(unittest.TestCase):
             "action")
         self.assertEqual(
             parse(commands[0]).action,"pc_transfer")
+
+
+class FileConfirmationFlow(unittest.TestCase):
+    def test_exact_user_voice_transcript_reaches_confirmation_and_executes(self):
+        # Regression: app.run_one previously failed with NameError: Intent
+        # after resolving the most recent ZIP, before the confirmation dialog.
+        from hover_next.app import run_one
+        executor=MagicMock()
+        executor.config={}
+        executor.execute.return_value="Moví backup.zip al Escritorio."
+        selected={"operation":"move","pick":"name","kind":"archive",
+                  "from":"downloads","to":"desktop","name":"backup.zip",
+                  "size":"123","mtime_ns":"456"}
+        with patch("hover_next.pc_files.prepare_transfer",return_value=selected) as prepare, \
+             patch("hover_next.app.confirm_voice_intent",return_value=True) as confirm, \
+             patch("hover_next.app.publish"):
+            result=run_one(
+                "Oye Hover, mueve el último comprimido de descargas al escritorio.",
+                executor,voice_mode=True)
+        self.assertEqual(result,"Moví backup.zip al Escritorio.")
+        prepare.assert_called_once()
+        confirm.assert_called_once()
+        approved=confirm.call_args.args[0]
+        self.assertEqual(approved.action,"pc_transfer")
+        self.assertTrue(approved.requires_confirmation)
+        self.assertEqual(approved.args["name"],"backup.zip")
+        executor.execute.assert_called_once_with(approved,confirmed=True)
+
+    def test_user_cancels_without_moving_any_file(self):
+        from hover_next.app import run_one
+        executor=MagicMock()
+        executor.config={}
+        selected={"operation":"move","pick":"name","kind":"archive",
+                  "from":"downloads","to":"desktop","name":"backup.zip",
+                  "size":"123","mtime_ns":"456"}
+        with patch("hover_next.pc_files.prepare_transfer",return_value=selected), \
+             patch("hover_next.app.confirm_voice_intent",return_value=False), \
+             patch("hover_next.app.publish"):
+            result=run_one(
+                "Oye Hover, mueve el último comprimido de descargas al escritorio.",
+                executor,voice_mode=True)
+        self.assertIsNone(result)
+        executor.execute.assert_not_called()
 
 
 class FileOperations(unittest.TestCase):
