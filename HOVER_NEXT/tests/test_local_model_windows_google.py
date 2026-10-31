@@ -201,6 +201,22 @@ class MissingEventTitleTests(unittest.TestCase):
         executor.execute.assert_called_once_with(intent,confirmed=True)
 
 
+class VSCodeLogIsolationTests(unittest.TestCase):
+    def test_gui_launch_does_not_send_node_warnings_to_hover_console(self):
+        from hover_next import desktop
+        from subprocess import DEVNULL
+        with patch("shutil.which",return_value="C:/Mock/Code.exe"), \
+             patch("hover_next.desktop.os.path.isfile",return_value=True), \
+             patch("hover_next.desktop.subprocess.Popen") as launch:
+            message=desktop.open_windows_app("vscode")
+        self.assertIn("Visual Studio Code",message)
+        settings=launch.call_args.kwargs
+        self.assertEqual(settings["stdout"],DEVNULL)
+        self.assertEqual(settings["stderr"],DEVNULL)
+        self.assertEqual(settings["stdin"],DEVNULL)
+        self.assertFalse(settings["shell"])
+
+
 class GoogleCalendarDraftTests(unittest.TestCase):
     def test_calendar_creates_tomorrow_all_day_with_exclusive_end(self):
         tz=ZoneInfo("America/Bogota")
