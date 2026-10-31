@@ -172,6 +172,7 @@ std::wstring g_copyToastText;
 std::wstring g_voiceMessage;
 std::wstring g_voiceState;
 ULONGLONG g_voiceNoticeUntil=0, g_voiceExpandUntil=0, g_lastVoiceRead=0;
+ULONGLONG g_voiceQuietUntil=0;
 ULONGLONG g_lastTabsRead=0;
 int g_feedbackAction=-1;
 ULONGLONG g_feedbackUntil=0;
@@ -790,26 +791,21 @@ void ReadVoiceBridge() {
     if(serial==g_lastVoiceSerial)return;
     g_lastVoiceSerial=serial;
     std::string mode=blob.substr(a+1,b-a-1);
-    std::string pageString=blob.substr(b+1,c-b-1);
+    // Voice updates are ALWAYS compact; no automatic page change, toast
+    // enlargement, mouse-focus acquisition or animated opening.
+    // Older mods also remain compact when Python sends "quiet-*".
+    bool quiet=mode.rfind("quiet-",0)==0;
+    if(quiet)mode=mode.substr(6);
     g_voiceState=DecodeUtf8(mode);
     g_voiceMessage=DecodeUtf8(blob.substr(c+1));
     if(g_voiceMessage.size()>115)g_voiceMessage.resize(115);
     ULONGLONG now=GetTickCount64();
-    if(mode=="listening" || mode=="thinking") {
-        g_voiceNoticeUntil=now+9000;
-    } else if(mode=="ok" || mode=="error") {
-        g_voiceNoticeUntil=now+3800;
-    } else {
-        g_voiceNoticeUntil=0;
-    }
-    if(!pageString.empty()&&pageString!="-1") {
-        int page=std::atoi(pageString.c_str());
-        if(page>=kBuiltInPages+int(g_voiceTabs.size()))ReadVoiceTabs();
-        if(page>=0 && page<kBuiltInPages+int(g_voiceTabs.size())){
-            ChangePage(page);
-            g_voiceExpandUntil=now+3400;
-        }
-    }
+    g_voiceNoticeUntil=0; // never trigger kToastHeight due to voice
+    g_voiceExpandUntil=0; // no timed enlargement by voice
+    g_voiceQuietUntil=(mode=="listening" || mode=="thinking")?now+1400:0;
+    // Requested pages are intentionally ignored for voice events.
+    // Only a user's mouse/touchpad can open or navigate the notch.
+
 }
 
 void ReadBridgeState() {
@@ -940,7 +936,7 @@ void DrawEyes(Graphics& g,float cx) {
     const BYTE ar=accent.GetR(), ag=accent.GetG(), ab=accent.GetB();
     const float phase=float(GetTickCount64()%5700ULL);
     const bool voiceListening=g_voiceState==L"listening" &&
-                              GetTickCount64()<g_voiceNoticeUntil;
+                              GetTickCount64()<g_voiceQuietUntil;
     float blink=1.0f;
     if(phase<195.0f) blink=1.0f-0.94f*std::sin(3.14159265f*phase/195.0f);
     const float cy=23.2f;
