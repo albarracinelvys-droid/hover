@@ -23,6 +23,9 @@ def _contains(text: str, *phrases: str) -> bool:
 
 def parse_direct(text: str) -> Intent | None:
     t = clean(text)
+    # Closing is guarded: only a foreground browser tab titled Google is eligible.
+    if re.fullmatch(r"(?:cierra|cerrar) (?:la (?:pestana|ventana) de )?google",t):
+        return Intent("close_google_tab")
     launch = _contains(t, "abre", "abrir", "muestra", "muestrame",
                        "inicia", "ejecuta", "crea", "crear", "nuevo", "nueva",
                        "redacta", "redactar")
