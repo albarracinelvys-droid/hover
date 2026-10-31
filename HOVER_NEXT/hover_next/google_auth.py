@@ -32,7 +32,18 @@ SCOPES = {
         "https://www.googleapis.com/auth/drive.file",
     ),
 }
-IDENTITY_SCOPE = "https://www.googleapis.com/auth/userinfo.email"
+# Google may return the OpenID identity aliases "openid" and "email" along
+# with userinfo.email. Request them explicitly: oauthlib validates that
+# the scopes in the token response match the scopes requested.
+IDENTITY_SCOPES = (
+    "openid",
+    "email",
+    "https://www.googleapis.com/auth/userinfo.email",
+)
+
+
+def _requested_scopes(service):
+    return list(SCOPES[_validate_service(service)]) + list(IDENTITY_SCOPES)
 
 
 class GoogleAuthError(RuntimeError):
@@ -89,7 +100,7 @@ def _read(service):
         # Require the service's own scopes; never reuse another service's
         # broader token or mistake a service for having been authorized.
         cred=Credentials.from_authorized_user_info(
-            json.loads(blob),scopes=list(SCOPES[service]) + [IDENTITY_SCOPE])
+            json.loads(blob),scopes=_requested_scopes(service))
         return cred
     except (OSError,UnicodeError,ValueError,KeyError) as exc:
         raise GoogleAuthError(
@@ -116,30 +127,64 @@ def _client_path():
 
 
 def connect(service):
-    """Open Google's local loopback consent flow. No passwords in HOVER."""
+    """Complete OAuth, then persist an encrypted token before reporting success."""
     _validate_service(service)
     _client_path()
     if sys.platform!="win32":
         raise GoogleAuthError("La conexión desde la isla se realiza en Windows.")
     try:
         from google_auth_oauthlib.flow import InstalledAppFlow
+    except ImportError as exc:
+        raise GoogleAuthError(
+            "Falta google-auth-oauthlib. Ejecuta INSTALAR_GOOGLE_HOVER.bat."
+        ) from exc
+
+    try:
         flow=InstalledAppFlow.from_client_secrets_file(
-            str(CLIENT),scopes=list(SCOPES[service])+[IDENTITY_SCOPE])
-        # This displays the consent page in the user's browser.
+            str(CLIENT),scopes=_requested_scopes(service))
+        # Google's redirect page appears BEFORE the token exchange and save.
+        # Never claim the account is connected on that intermediate page.
         credentials=flow.run_local_server(
             host="127.0.0.1",port=0,open_browser=True,
             authorization_prompt_message="Autoriza HOVER en la pestaña de Google.",
-            success_message="Google conectado con HOVER; puedes cerrar esta pestaña.",
+            success_message=(
+                "Permisos recibidos. Vuelve a HOVER para comprobar "
+                "que la conexión se haya guardado."),
             access_type="offline",prompt="consent")
-        _save(service,credentials)
-        return f"{service} conectado mediante OAuth 2.0"
     except Exception as exc:
-        if isinstance(exc,GoogleAuthError):
-            raise
+        if "Scope has changed" in str(exc):
+            raise GoogleAuthError(
+                "Google devolvió permisos diferentes de los solicitados. "
+                "Actualiza HOVER y vuelve a autorizar."
+            ) from exc
         raise GoogleAuthError(
-            f"No pude autorizar {service}. Revisa las APIs habilitadas, "
-            "los usuarios de prueba y los permisos del proyecto Google Cloud."
+            f"Falló el intercambio OAuth de {service} "
+            f"({type(exc).__name__}). Comprueba la autorización en Google."
         ) from exc
+
+    try:
+        _save(service,credentials)
+    except ImportError as exc:
+        raise GoogleAuthError(
+            "Google autorizó la cuenta, pero no se pudo cifrar el token: "
+            "falta pywin32/win32crypt. Ejecuta INSTALAR_GOOGLE_HOVER.bat."
+        ) from exc
+    except (OSError,GoogleAuthError) as exc:
+        raise GoogleAuthError(
+            f"Google autorizó la cuenta, pero Windows no pudo guardar el "
+            f"token cifrado de {service} ({type(exc).__name__})."
+        ) from exc
+    except Exception as exc:
+        raise GoogleAuthError(
+            f"Google autorizó la cuenta, pero falló el guardado DPAPI de "
+            f"{service} ({type(exc).__name__})."
+        ) from exc
+
+    if not _token_path(service).is_file():
+        raise GoogleAuthError(
+            f"No se encontró el token cifrado de {service} tras autorizar."
+        )
+    return f"{service} conectado mediante OAuth 2.0"
 
 
 def credentials(service):
