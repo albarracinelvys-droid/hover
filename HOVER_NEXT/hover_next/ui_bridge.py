@@ -28,8 +28,14 @@ def publish(state: str, message: str = "", page: int = -1) -> bool:
     global _LAST_WARNING
     if state not in ALLOWED:
         raise ValueError("Estado de interfaz no permitido")
+    # Voice must NEVER expand or change pages in the notch. Prefixing the
+    # state makes this backward-compatible with older installed Windhawk mods:
+    # they treat "quiet-*" as unrecognized and therefore do not show the
+    # voice toast. The updated mod decodes it as a subtle compact indicator.
+    # Do not send a page even if a caller passes status_page(action).
     safe = str(message).replace("\t", " ").replace("\r", " ").replace("\n", " ")[:115]
-    payload = f"{time.time_ns()}\t{state}\t{int(page)}\t{safe}"
+    wire_state = "idle" if state == "idle" else "quiet-" + state
+    payload = f"{time.time_ns()}\t{wire_state}\t-1\t{safe}"
     with _WRITE_LOCK:
         target=bridge_file()
         tmp=target.with_name(f"voice_ui.{os.getpid()}.{uuid.uuid4().hex}.tmp")
