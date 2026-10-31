@@ -20,6 +20,8 @@ class BrowserBridge:
             from playwright.sync_api import sync_playwright
         except ImportError as e:
             raise BrowserUnavailable('Instala Playwright: pip install playwright') from e
+        print("[chat] Abriendo Chrome controlado por HOVER (perfil independiente).",flush=True)
+        print("[chat] Si no has entrado, inicia sesión en ESTE Chrome una sola vez.",flush=True)
         self.p=sync_playwright().start()
         try:
             self.context=self.p.chromium.launch_persistent_context(
@@ -93,7 +95,9 @@ class BrowserBridge:
 
         else:
             page = self.page(provider, new=True)
+        page.bring_to_front()
         self.prepared = (provider, page)
+        print(f"[chat] Chat preparado: {provider}. Buscando el cuadro de escritura.",flush=True)
         return "Pestaña abierta. Dicta el mensaje."
 
     def send_prepared(self, provider, prompt):
@@ -104,9 +108,22 @@ class BrowserBridge:
         page = self.prepared[1]
         if page.is_closed():
             raise BrowserUnavailable("El chat preparado se cerró.")
-        # UI layouts can vary; fail closed instead of typing into the wrong field.
-        selectors = ['[contenteditable="true"][role="textbox"]',
-                     '#prompt-textarea', 'div[contenteditable="true"]', 'textarea']
+        # Never enter the prompt in a redirected login page or unrelated tab.
+        from urllib.parse import urlparse
+        hostname = urlparse(page.url).hostname
+        if hostname not in HOSTS[provider]:
+            raise BrowserUnavailable(
+                "HOVER te llevó a una pantalla de inicio de sesión. "
+                "Accede a tu cuenta en el Chrome abierto por HOVER y repite la orden."
+            )
+        selectors = {
+            "chatgpt": ["#prompt-textarea",
+                        '[contenteditable="true"][role="textbox"]',
+                        'div[contenteditable="true"]', 'textarea'],
+            "claude": ['div.ProseMirror[contenteditable="true"]',
+                       '[contenteditable="true"][role="textbox"]',
+                       'div[contenteditable="true"]', 'textarea'],
+        }[provider]
         editor = None
         for selector in selectors:
             locator = page.locator(selector).last
@@ -115,13 +132,18 @@ class BrowserBridge:
                 break
         if editor is None:
             raise BrowserUnavailable(
-                "No encontré el cuadro del chat. Inicia sesión y comprueba que estás "
-                "dentro del proyecto correcto."
+                "No encontré el cuadro del mensaje. HOVER utiliza un Chrome "
+                "independiente: inicia sesión allí, entra al chat correcto "
+                "y repite tu orden de voz."
             )
+        page.bring_to_front()
+        print(f"[chat] Escribiendo en {provider}: {prompt[:90]!r}",flush=True)
         editor.fill(prompt, timeout=10000)
-        editor.press("Enter")
+        editor.press("Enter", timeout=10000)
+        print("[chat] Pulsé Enter en el cuadro del chat.",flush=True)
         self.prepared = None
-        return "Escribí el mensaje y pulsé Enviar; verifica el resultado en el navegador."
+        return ("Escribí el mensaje y pulsé Enter en el chat; "
+                "verifica que aparezca enviado en el navegador.")
 
     def close(self):
         self.prepared=None
