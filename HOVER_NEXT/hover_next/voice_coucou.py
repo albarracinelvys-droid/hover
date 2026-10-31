@@ -338,6 +338,11 @@ def run(executor, *, engine="auto", model="small",
         lambda command:run_one(command,executor,voice_mode=True),
         send_dictated)
 
+    # Calendar refresh is independent of the audio/Whisper worker. The notch
+    # only reads a small local snapshot while the user opens its Calendar tab.
+    from .calendar_bridge import start_background
+    start_background(stop)
+
     def recognizer_worker():
         try:
             while not stop.is_set():
