@@ -99,6 +99,16 @@ class VoiceFollowupTests(unittest.TestCase):
         self.assertEqual(self.actions[-1][1].args,
                          {"kind":"txt","name":"prueba uno"})
 
+    def test_new_oye_txt_request_overrides_pending_repo(self):
+        self.d.process("Hover crea repositorio privado en Github")
+        self.assertEqual(self.d.pending_kind,"repo")
+        self.assertEqual(self.d.process(
+            "Oye, crea un TXT en la carpeta que tienes como atajo rápido."),"action")
+        self.assertEqual(self.d.pending_kind,"txt")
+        self.assertEqual(self.d.process("prueba uno"),"action")
+        self.assertEqual(self.actions[-1][1].action,"create_local")
+        self.assertEqual(self.actions[-1][1].args["name"],"prueba uno")
+
     def test_no_oye_trigger_in_idle_without_hover(self):
         self.assertEqual(self.d.process(
             "Oye, crea un TXT en la carpeta que tienes como atajo rápido."),
