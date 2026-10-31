@@ -103,10 +103,14 @@ class NoPromptConfirmationTests(unittest.TestCase):
                     bridge.send_prompt("chatgpt", "¿Cómo estás?", new=False)
             page.locator.assert_not_called()
 
+    def test_local_transfers_do_not_need_confirmation(self):
+        self.assertFalse(parse(
+            "Hover mueve el último archivo de Descargas a mi carpeta configurada"
+        ).requires_confirmation)
+
     def test_high_impact_operations_still_need_approval(self):
         for phrase in (
             "Hover crea un repositorio privado en GitHub llamado prueba-materiales",
-            "Hover mueve el último archivo de Descargas a mi carpeta configurada",
             "Hover adjunta archivo financiero.pdf a Claude",
         ):
             with self.subTest(phrase=phrase):
