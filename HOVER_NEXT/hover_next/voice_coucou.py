@@ -197,7 +197,7 @@ class VoiceDialogue:
                 replacement=parse(candidate)
                 safe={"local_name_needed","create_local","google_search",
                       "google_app","windows_app","office_new","open_link",
-                      "media_key","spotify_play","spotify_resume",
+                      "media_key","spotify_open","spotify_play","spotify_resume",
                       "pc_close_window","pc_create","pc_name_needed"}
                 if replacement.action in safe:
                     print("[dialogo] Cambiando solicitud pendiente a:",candidate,flush=True)
@@ -216,7 +216,7 @@ class VoiceDialogue:
         # Voice-session context allows "Reprodúcelo" after opening Spotify,
         # without permanently listening for arbitrary unlabeled commands.
         if (now<self.recent_until
-                and self.recent_action in ("spotify_play","spotify_resume")
+                and self.recent_action in ("spotify_open","spotify_open","spotify_play","spotify_resume")
                 and normalized in ("reproducelo","ponlo","dale play",
                                    "reanuda","reproduce","dale reproducir")):
             return self._command("reproducelo")
@@ -236,7 +236,7 @@ class VoiceDialogue:
             intent=parse(candidate)
             allow={"local_name_needed","create_local","google_search",
                    "google_app","windows_app","office_new","open_link",
-                   "media_key","spotify_play","spotify_resume","open_site",
+                   "media_key","spotify_open","spotify_play","spotify_resume","open_site",
                    "pc_transfer","pc_rename","pc_create","pc_append"}
             if intent.action in allow:
                 print("[dialogo] Orden de seguimiento con 'Oye':",candidate,flush=True)
