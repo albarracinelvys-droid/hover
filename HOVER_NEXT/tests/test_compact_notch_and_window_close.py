@@ -61,7 +61,7 @@ class ExplorerWindowTests(unittest.TestCase):
             msg=pc_files.close_foreground_window("explorer")
         self.assertIn("Descargas",msg)
         gui.PostMessage.assert_called_once_with(20,16,0,0)
-        gui.PostMessage.assert_not_called_with(10,16,0,0)
+        self.assertNotIn(((10,16,0,0),{}),[(x.args,x.kwargs) for x in gui.PostMessage.call_args_list])
 
     def test_close_downloads_selects_correct_window_even_with_two_explorers(self):
         gui,con=windows_mock()
