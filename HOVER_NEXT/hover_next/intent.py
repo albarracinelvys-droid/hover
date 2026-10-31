@@ -42,8 +42,8 @@ def _parse_private_repo_request(t: str) -> Intent | None:
     if not explicit and not uncertain:
         return None
     marker = re.search(
-        r'\b(?:que\s+se\s+llam(?:a|e)|llamad[oa]|'
-        r'con\s+el\s+nombre\s+de|nombre(?:\s+de)?)'
+        r'\b(?:que\s+se\s+llam(?:a|e)|que\s+ya\s+me|que\s+llame|'
+        r'llamad[oa]|con\s+el\s+nombre\s+de|nombre(?:\s+de)?)'
         r'\s*[,;:]?\s+(.+)$', t)
     if not marker:
         return Intent('repo_name_needed')
@@ -100,8 +100,9 @@ def _parse_local_creation(t: str) -> Intent | None:
     if not kind:
         return None
     marker = re.search(
-        r'\b(?:que se llam(?:a|e)|llamad[oa]|de nombre|con nombre)\s+'
-        r'([a-z0-9][a-z0-9._ -]{0,90})' + r'\Z', t)
+        r'\b(?:que\s+se\s+llam(?:a|e)|que\s+llame|que\s+ya\s+me|'
+        r'que\s+llega\s+a|llamad[oa]|de\s+nombre|con\s+nombre)'
+        r'\s*[,;:]?\s+([a-z0-9][a-z0-9._ -]{0,90})\Z',t)
     if marker is None:
         return Intent("local_name_needed", args={"kind": kind})
     name = marker.group(1).strip(" .-")
