@@ -16,14 +16,15 @@ from hover_next import local_nlu
 
 
 class LowerLatencyVADTests(unittest.TestCase):
-    def test_new_vad_finalizes_after_540ms_not_750ms(self):
+    def test_reliable_vad_finalizes_after_750ms(self):
         vad=AdaptiveVad()
-        self.assertEqual(vad.hangover_frames,18)
+        self.assertEqual(vad.hangover_frames,25)
         speech=np.full(FRAME,0.006,dtype=np.float32)
         silence=np.zeros(FRAME,dtype=np.float32)
         for _ in range(25):
             self.assertIsNone(vad.feed(speech))
-        for _ in range(17):
+        # Natural 600ms pauses must NOT fragment a voice command.
+        for _ in range(24):
             self.assertIsNone(vad.feed(silence))
         complete=vad.feed(silence)
         self.assertIsInstance(complete,np.ndarray)
@@ -45,7 +46,7 @@ class FastASRTests(unittest.TestCase):
         self.rec.model=MagicMock()
         self.rec.model.transcribe.return_value=([],None)
 
-    def test_short_commands_use_smaller_whisper_beam(self):
+    def test_short_commands_can_explicitly_use_fast_whisper_beam(self):
         with patch.dict("os.environ",{"HOVER_WHISPER_BEAM":"3"}):
             self.rec.transcribe([0.01]*1600)
         kw=self.rec.model.transcribe.call_args.kwargs
@@ -53,15 +54,16 @@ class FastASRTests(unittest.TestCase):
         self.assertEqual(kw["language"],"es")
         self.assertFalse(kw["condition_on_previous_text"])
 
-    def test_higher_accuracy_beam_can_be_selected(self):
+    def test_higher_accuracy_beam_is_default(self):
+        import os
         with patch.dict("os.environ",{"HOVER_WHISPER_BEAM":"5"}):
             self.rec.transcribe([0.01]*1600)
         self.assertEqual(self.rec.model.transcribe.call_args.kwargs["beam_size"],5)
 
-    def test_invalid_beam_falls_back_to_fast_default(self):
+    def test_invalid_beam_falls_back_to_reliable_default(self):
         with patch.dict("os.environ",{"HOVER_WHISPER_BEAM":"invalid"}):
             self.rec.transcribe([0.01]*1600)
-        self.assertEqual(self.rec.model.transcribe.call_args.kwargs["beam_size"],3)
+        self.assertEqual(self.rec.model.transcribe.call_args.kwargs["beam_size"],5)
 
 
 class FastIntentTests(unittest.TestCase):
@@ -119,6 +121,13 @@ class WarmNLUTests(unittest.TestCase):
         self.assertFalse(payload["stream"])
         self.assertEqual(payload["keep_alive"],"20m")
         self.assertNotIn("tools",payload)
+
+    def test_warmup_is_disabled_by_default_on_shared_cpu(self):
+        import os
+        with patch.dict("os.environ",{"HOVER_NLU":"auto"},clear=True), \
+             patch("hover_next.local_nlu.urlopen") as request:
+            self.assertFalse(local_nlu.warm_model())
+        request.assert_not_called()
 
     def test_warmup_can_be_disabled_to_save_memory(self):
         with patch.dict("os.environ",{"HOVER_NLU_PREWARM":"0"}), \
