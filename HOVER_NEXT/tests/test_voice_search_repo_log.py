@@ -42,7 +42,7 @@ class SpokenSearchTests(unittest.TestCase):
             executor = Executor(Path(tmp) / "config.json", browser=MagicMock())
             with patch("hover_next.desktop.webbrowser.open_new_tab", return_value=True) as opened:
                 executor.execute(parse("Hover busca C++ & Python en Google"))
-            self.assertIn("c%2B%2B", opened.call_args.args[0].lower())
+            self.assertIn("c%2b%2b", opened.call_args.args[0].lower())
             self.assertIn("%26", opened.call_args.args[0])
 
     def test_garbled_search_not_guessed(self):
