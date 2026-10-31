@@ -31,6 +31,28 @@ Ejemplo: «Hover, abre GitHub».
 - «Hover, abre ChatGPT»
 - «Hover, abre Claude»
 
+## Preguntas a ChatGPT y Claude por voz
+
+- «**Oye Hover, abre ChatGPT y pregúntale cómo está**»: abre una
+  conversación nueva de ChatGPT y escribe **¿Cómo estás?**, después
+  pulsa Enter en el cuadro del chat.
+- «**Hover, abre Claude y pregúntale qué es un PLC**»: prepara una
+  conversación nueva y envía esa pregunta.
+- «**Hover, abre chat, repete y pregúntale cómo está**»: acepta la
+  transcripción errónea «chat, repete» que produce Whisper.
+- «**Hover, abre ChatGPT en proyecto Zap y escribe lo siguiente:
+  revisa mi automatización**»: utiliza el proyecto guardado en Atajos.
+- «**Hover, abre ChatGPT y escribe lo siguiente**»: abre el chat y
+  escucha el mensaje que dictes a continuación.
+
+**Importante:** para escribir preguntas, HOVER controla una ventana
+de **Chrome independiente**. Inicia sesión en ChatGPT/Claude allí una
+primera vez. La apertura de sitios sencillos utiliza tu navegador
+predeterminado, pero los envíos automatizados necesitan esa sesión.
+Si no encuentra el cuadro de escritura, mostrará un error en la consola.
+Pulsar Enter en el editor no confirma por sí solo la recepción de
+la respuesta por el servidor; verifica el chat en el navegador.
+
 ## Multimedia (controles globales de Windows)
 - «Hover, pausa la música»
 - «Hover, siguiente canción»
