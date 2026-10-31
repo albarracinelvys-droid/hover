@@ -70,6 +70,11 @@ class Executor:
         if action == 'media_key':
             from .desktop import send_media_key
             return send_media_key(intent.args['key'])
+        if action == 'google_search':
+            from .desktop import search_google
+            return search_google(intent.args['query'])
+        if action == 'search_query_needed':
+            return 'Repite la busqueda con un termino claro. Ejemplo: Hover busca iPhone en Google.'
         if action == 'repo_name_needed':
             return ('Entendí que quieres crear un repositorio privado, pero no su nombre. '
                     'Di: Hover, crea un repositorio privado en GitHub llamado Ejemplo.')
