@@ -275,55 +275,92 @@ def open_document(name: str = "") -> str:
     return f"Documento abierto: {target.name}"
 
 
-def _spotify_session_play() -> bool:
-    """Best-effort non-toggle PLAY with optional Windows media session API.
+def _spotify_session_play() -> str:
+    """Request PLAY only from a Spotify Windows media session.
 
-    This is preferable to VK_MEDIA_PLAY_PAUSE because a toggle can pause a
-    track that is already playing. Windows SDK bindings are optional.
+    No generic global play/pause: it could pause another application. Never
+    report success unless Windows confirms playback state as PLAYING.
     """
     try:
         import asyncio
-        from winsdk.windows.media.control import (
-            GlobalSystemMediaTransportControlsSessionManager as SessionManager
-        )
+        try:
+            from winrt.windows.media.control import (
+                GlobalSystemMediaTransportControlsSessionManager as Manager)
+        except ImportError:
+            from winsdk.windows.media.control import (
+                GlobalSystemMediaTransportControlsSessionManager as Manager)
 
-        async def try_play():
-            manager = await SessionManager.request_async()
-            for session in manager.get_sessions():
-                if "spotify" in str(session.source_app_user_model_id).casefold():
-                    return bool(await session.try_play_async())
-            return False
-
-        return asyncio.run(try_play())
+        async def resume():
+            manager=await Manager.request_async()
+            sessions=list(manager.get_sessions())
+            spotify=[session for session in sessions
+                     if "spotify" in str(session.source_app_user_model_id).lower()]
+            if not spotify:
+                return "no_session"
+            for session in spotify:
+                try:
+                    before=session.get_playback_info()
+                    if "playing" in str(before.playback_status).lower():
+                        return "playing"
+                    accepted=await session.try_play_async()
+                    if accepted:
+                        after=session.get_playback_info()
+                        if "playing" in str(after.playback_status).lower():
+                            return "playing"
+                        return "requested"
+                except Exception:
+                    continue
+            return "failed"
+        return asyncio.run(resume())
+    except ImportError:
+        return "missing_api"
     except Exception:
-        return False
+        return "failed"
 
 
-def spotify_start_playback(open_app: bool = True) -> str:
-    """Launch Spotify and request playback; never claim audio is confirmed."""
-    if sys.platform != "win32":
+def spotify_start_playback(open_app: bool = True, *, play: bool = True) -> str:
+    """Launch Spotify, optionally resume an EXISTING user-selected track.
+
+    Opening an app is not the same as starting audio. No Spotify Web API
+    credentials are stored here and HOVER never claims unverified playback.
+    """
+    if sys.platform!="win32":
         raise ActionUnavailable("Spotify por voz necesita Windows.")
     if open_app:
         try:
             os.startfile("spotify:")
-            opened = True
+            opened=True
         except (OSError,AttributeError):
-            opened = webbrowser.open_new_tab("https://open.spotify.com/")
+            opened=bool(webbrowser.open_new_tab("https://open.spotify.com/"))
         if not opened:
-            raise ActionUnavailable(
-                "No pude abrir Spotify. Comprueba que esté instalado o usa Spotify Web."
-            )
-        # Give the desktop app time to register its media session.
-        import time
-        time.sleep(1.2)
-    if _spotify_session_play():
-        return ("Solicité reproducir en la sesión de Spotify de Windows. "
-                "Comprueba que haya música.")
-    # Media key fallback can toggle playback/pause, not guarantee PLAY.
-    send_media_key("play_pause")
-    return ("Envié reproducir/pausar al reproductor de Windows. "
-            "Si Spotify no suena, abre una lista y elige una canción primero; "
-            "el sistema no confirmó el audio.")
+            raise ActionUnavailable("No se pudo abrir Spotify. Revisa su instalación.")
+    if not play:
+        return ("Spotify abierto. Para reproducir, selecciona una canción o "
+                "lista y di 'Hover, reproduce Spotify'.")
+    # Allow a newly opened desktop client to register its session. The first
+    # call can still be sessionless until a song is selected by the user.
+    import time
+    state="no_session"
+    for attempt in range(3 if open_app else 1):
+        if open_app:
+            time.sleep(0.8)
+        state=_spotify_session_play()
+        if state in ("playing","requested","missing_api","failed"):
+            break
+    if state=="playing":
+        return "Spotify confirma una sesión de reproducción activa en Windows."
+    if state=="requested":
+        return ("Spotify aceptó la solicitud de reproducir, pero Windows "
+                "todavía no confirmó el audio.")
+    if state=="missing_api":
+        return ("Spotify abierto; falta el controlador multimedia de Windows. "
+                "Instala requirements.txt para permitir reanudar canciones.")
+    if state=="no_session":
+        return ("Spotify abierto, pero Windows no detectó una sesión con una canción. "
+                "Selecciona una canción o lista en Spotify una vez y luego "
+                "di 'Hover, reproduce Spotify'.")
+    return ("Spotify no confirmó reproducción. Comprueba que la aplicación "
+            "esté abierta y haya una canción seleccionada.")
 
 
 def send_media_key(key: str) -> str:
