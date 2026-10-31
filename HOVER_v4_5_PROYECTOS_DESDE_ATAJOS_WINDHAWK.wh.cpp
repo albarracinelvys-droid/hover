@@ -1663,12 +1663,12 @@ void OpenProjectManager(HWND owner,int provider) {
     HINSTANCE instance=GetModuleHandleW(nullptr);
     WNDCLASSEXW wc{};wc.cbSize=sizeof(wc);wc.hInstance=instance;
     wc.lpfnWndProc=ProjectWindowProc;wc.lpszClassName=kProjectWindowClass;
-    wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+    wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
     wc.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
     if(!GetClassInfoExW(instance,kProjectWindowClass,&wc)){
         wc={};wc.cbSize=sizeof(wc);wc.hInstance=instance;
         wc.lpfnWndProc=ProjectWindowProc;wc.lpszClassName=kProjectWindowClass;
-        wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+        wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
         wc.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
         if(!RegisterClassExW(&wc))return;
     }
@@ -2125,7 +2125,7 @@ DWORD WINAPI UIThreadMain(LPVOID){
     if(GdiplusStartup(&token,&in,nullptr)!=Ok){if(SUCCEEDED(hr))OleUninitialize();return 0;}
     WNDCLASSEXW wc{};wc.cbSize=sizeof(wc);wc.lpfnWndProc=WndProc;
     wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=kClass;
-    wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+    wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
     if(!RegisterClassExW(&wc)){GdiplusShutdown(token);if(SUCCEEDED(hr))OleUninitialize();return 0;}
     RECT m=PrimaryBounds();
     HWND hwnd=CreateWindowExW(WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_TOPMOST,
