@@ -53,7 +53,7 @@ def _parse_private_repo_request(t: str) -> Intent | None:
     # A missing or uncertain privacy statement must never cause a public
     # repository to be created (nor allow automatic private creation).
     required = {'require_private': not private}
-    if open_new or tentative:
+    if open_new or (tentative and not private):
         return Intent('repo_name_needed',args=required)
 
     marker = re.search(
