@@ -14,6 +14,7 @@ import asyncio
 import os
 import hashlib
 import tempfile
+import time
 from pathlib import Path
 
 try:
@@ -192,6 +193,7 @@ async def run(stop_event=None) -> None:
     last_command = ""
     last_art_key = None
     last_art_name = ""
+    last_art_attempt = 0.0
     manager = None
     # The producer can be the Windhawk mod or a direct voice command.
     # Commands must be monotonically versioned to prevent replay.
@@ -227,8 +229,11 @@ async def run(stop_event=None) -> None:
                     shuffle, repeat = parse_mode(info)
                     art_key=(str(session.source_app_user_model_id),
                              str(media.title), str(media.artist))
-                    if art_key!=last_art_key:
+                    if art_key!=last_art_key or (
+                            not last_art_name and
+                            time.monotonic()-last_art_attempt>=5.0):
                         last_art_key=art_key
+                        last_art_attempt=time.monotonic()
                         last_art_name=await cover_from_media(media)
                     data.update(
                         playing=int(is_playing),
