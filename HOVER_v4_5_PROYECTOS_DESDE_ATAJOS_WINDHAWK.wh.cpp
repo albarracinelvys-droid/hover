@@ -74,6 +74,7 @@ La visualizacion del portapapeles puede desactivarse por privacidad.
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <objidl.h> // Requerido por GDI+ para IStream y GUID en MSVC.
 #include <gdiplus.h>
 #include <shlobj.h>
 #include <shellapi.h>
