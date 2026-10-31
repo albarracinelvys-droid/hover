@@ -304,9 +304,14 @@ def _spotify_session_play() -> str:
                         return "playing"
                     accepted=await session.try_play_async()
                     if accepted:
-                        after=session.get_playback_info()
-                        if "playing" in str(after.playback_status).lower():
-                            return "playing"
+                        # WinRT often reports the previous state immediately
+                        # after try_play_async(); allow state notifications
+                        # to settle before claiming Spotify was started.
+                        for _ in range(7):
+                            await asyncio.sleep(0.25)
+                            after=session.get_playback_info()
+                            if "playing" in str(after.playback_status).lower():
+                                return "playing"
                         return "requested"
                 except Exception:
                     continue
@@ -326,7 +331,10 @@ def spotify_start_playback(open_app: bool = True, *, play: bool = True) -> str:
     """
     if sys.platform!="win32":
         raise ActionUnavailable("Spotify por voz necesita Windows.")
-    if open_app:
+    # On "reproduce Spotify" first try the EXISTING Spotify session.
+    # Do not refocus or relaunch an already-running app for every command.
+    state=_spotify_session_play() if play else "no_session"
+    if open_app and state=="no_session":
         try:
             os.startfile("spotify:")
             opened=True
@@ -335,18 +343,16 @@ def spotify_start_playback(open_app: bool = True, *, play: bool = True) -> str:
         if not opened:
             raise ActionUnavailable("No se pudo abrir Spotify. Revisa su instalación.")
     if not play:
-        return ("Spotify abierto. Para reproducir, selecciona una canción o "
-                "lista y di 'Hover, reproduce Spotify'.")
-    # Allow a newly opened desktop client to register its session. The first
-    # call can still be sessionless until a song is selected by the user.
-    import time
-    state="no_session"
-    for attempt in range(3 if open_app else 1):
-        if open_app:
-            time.sleep(0.8)
-        state=_spotify_session_play()
-        if state in ("playing","requested","missing_api","failed"):
-            break
+        return ("Spotify abierto. Si ya hay una canción seleccionada, "
+                "di 'Hover, reproduce Spotify' para reanudarla.")
+    # A freshly launched app registers a Windows media session later.
+    if open_app and state=="no_session":
+        import time
+        for _ in range(4):
+            time.sleep(0.7)
+            state=_spotify_session_play()
+            if state!="no_session":
+                break
     if state=="playing":
         return "Spotify confirma una sesión de reproducción activa en Windows."
     if state=="requested":
