@@ -6,7 +6,7 @@ echo HOVER - Parakeet local (modelo usado por Coucou Windows)
 echo Descarga inicial ~670 MB. Solo se necesita una vez.
 echo Comprueba espacio disponible y conexion a internet.
 echo.
-".venv\Scripts\python.exe" -m pip install --upgrade sherpa-onnx huggingface_hub
+".venv\Scripts\python.exe" -m pip install --upgrade "sherpa-onnx>=1.13,<2" huggingface_hub
 if errorlevel 1 (
  echo ERROR instalando sherpa-onnx. Comprueba la version de Python.
  pause
