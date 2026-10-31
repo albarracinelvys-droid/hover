@@ -1,5 +1,5 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-call ".\INICIAR_VOZ.bat"
+".venv\Scripts\python.exe" -m hover_next.launch_background --engine auto --threshold 0.0008
 exit /b %errorlevel%
