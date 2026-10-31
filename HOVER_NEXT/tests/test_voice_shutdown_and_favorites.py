@@ -45,8 +45,9 @@ class NativeVoiceConfirmationTests(unittest.TestCase):
                  patch("hover_next.app.confirm_intent",side_effect=AssertionError("Wrong confirm")), \
                  patch("hover_next.app.publish"), \
                  patch("builtins.input", side_effect=AssertionError("stdin must not be used")):
+                # Uncertain Whisper wording is NOT eligible for auto-create.
                 self.assertIsNone(run_one(
-                    "Hover crea repositorio privado llamado prueba1",
+                    "Hover sería uno de los requisitorios privados que se llama prueba1",
                     executor, voice_mode=True))
             dialog.assert_called_once()
             browser.close.assert_not_called()
