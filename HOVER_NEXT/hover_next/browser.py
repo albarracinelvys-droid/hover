@@ -84,8 +84,13 @@ class BrowserBridge:
             address = urlparse(project_url)
             if address.scheme != "https" or address.hostname not in HOSTS[provider]:
                 raise ValueError("La URL del proyecto no corresponde al proveedor solicitado.")
+            if provider == "chatgpt" and "/g/g-p-" not in address.path:
+                raise ValueError("La URL no parece ser de un proyecto de ChatGPT. Copia la URL del proyecto, no de un chat individual.")
             page = self.context.new_page()
             page.goto(project_url, wait_until="domcontentloaded", timeout=30000)
+            # The project page is the only allowed target here.
+            # The browser will not silently fall back to a general chat.
+
         else:
             page = self.page(provider, new=True)
         self.prepared = (provider, page)
