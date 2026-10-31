@@ -55,11 +55,11 @@ def parse_pc_command(text: str):
 
     # Recycle Bin only: deletion is armed by voice and requires an explicit
     # separate spoken "sí" (never silently delete on the first utterance).
-    delete_latest=(r"(?:elimina|eliminar|borra|borrar)\\s+"
-        r"(?:el|la)?\\s*(?:ultimo|ultima|mas reciente)\\s+"
-        r"(?:(?:archivo|fichero)\\s+)?"
-        r"(comprimido|zip|rar|pdf|excel|imagen|foto|texto|txt|archivo|fichero|documento)\\s+"
-        r"(?:de|desde|en)\\s+(?:(?:la|el)\\s+)?(?:(?:carpeta de|carpeta)\\s+)?"
+    delete_latest=(r"(?:elimina|eliminar|borra|borrar)\s+"
+        r"(?:el|la)?\s*(?:ultimo|ultima|mas reciente)\s+"
+        r"(?:(?:archivo|fichero)\s+)?"
+        r"(comprimido|zip|rar|pdf|excel|imagen|foto|texto|txt|archivo|fichero|documento)\s+"
+        r"(?:de|desde|en)\s+(?:(?:la|el)\s+)?(?:(?:carpeta de|carpeta)\s+)?"
         +LOC)
     m=re.fullmatch(delete_latest,t)
     if m:
@@ -70,9 +70,9 @@ def parse_pc_command(text: str):
         return "pc_delete",{"pick":"latest","kind":types.get(kind,"any"),
                             "location":_where(folder)}
 
-    delete_named=(r"(?:elimina|eliminar|borra|borrar)\\s+"
-        r"(?:(?:el|la)\\s+)?(?:archivo|fichero)\\s+(.+?)\\s+"
-        r"(?:de|desde|en)\\s+(?:(?:la|el)\\s+)?"+LOC)
+    delete_named=(r"(?:elimina|eliminar|borra|borrar)\s+"
+        r"(?:(?:el|la)\s+)?(?:archivo|fichero)\s+(.+?)\s+"
+        r"(?:de|desde|en)\s+(?:(?:la|el)\s+)?"+LOC)
     m=re.fullmatch(delete_named,t)
     if m:
         name,folder=m.groups()
