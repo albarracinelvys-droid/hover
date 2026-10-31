@@ -107,6 +107,25 @@ def open_google(service: str) -> str:
     return f"Abriendo {service.replace('_', ' ')}. Comprueba el inicio de sesión."
 
 
+def shutdown_windows() -> str:
+    """Request an immediate, normal Windows shutdown.
+
+    Do not use /f (forced closing), elevated commands, shell=True, or a
+    nonzero /t that implicitly forces applications to close. Windows may
+    still pause shutdown for unsaved documents, by design.
+    """
+    if sys.platform!="win32":
+        raise ActionUnavailable("Apagar el equipo requiere Windows.")
+    try:
+        subprocess.Popen(["shutdown.exe","/s","/t","0"],shell=False)
+    except OSError as exc:
+        raise ActionUnavailable(
+            "Windows no aceptó la solicitud de apagado."
+        ) from exc
+    return ("Solicité apagar Windows. Si hay cambios sin guardar, "
+            "Windows puede esperar para protegerlos.")
+
+
 def open_windows_app(app: str) -> str:
     if sys.platform != "win32":
         raise ActionUnavailable("Esta acción requiere Windows.")
@@ -120,6 +139,22 @@ def open_windows_app(app: str) -> str:
         "downloads": ["explorer.exe","shell:Downloads"],
         "documents": ["explorer.exe","shell:Personal"],
     }
+    if app=="vscode":
+        import shutil
+        options=[
+            shutil.which("Code.exe"),
+            os.path.join(os.environ.get("LOCALAPPDATA",""),"Programs",
+                         "Microsoft VS Code","Code.exe"),
+            os.path.join(os.environ.get("ProgramFiles",""),"Microsoft VS Code",
+                         "Code.exe"),
+        ]
+        executable=next(
+            (p for p in options if p and os.path.isfile(p)),None)
+        if not executable:
+            raise ActionUnavailable(
+                "No encontré Visual Studio Code instalado para este usuario.")
+        subprocess.Popen([executable],shell=False)
+        return "Solicité abrir Visual Studio Code."
     if app == "settings":
         os.startfile("ms-settings:")
         return "Configuración de Windows solicitada."
