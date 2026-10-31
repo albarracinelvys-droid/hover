@@ -24,7 +24,8 @@ def _contains(text: str, *phrases: str) -> bool:
 def parse_direct(text: str) -> Intent | None:
     t = clean(text)
     launch = _contains(t, "abre", "abrir", "muestra", "muestrame",
-                       "inicia", "ejecuta", "crea", "crear", "nuevo", "nueva")
+                       "inicia", "ejecuta", "crea", "crear", "nuevo", "nueva",
+                       "redacta", "redactar")
     if not launch:
         return None
     new = _contains(t, "crea", "crear", "nuevo", "nueva")
