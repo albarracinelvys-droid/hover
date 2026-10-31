@@ -53,13 +53,13 @@ def parse_pc_command(text: str):
             "from":_where(src),"to":_where(dest)
         }
 
-    # Recycle Bin only: deletion is armed by voice and requires an explicit
-    # separate spoken "sí" (never silently delete on the first utterance).
+    # Recycle Bin only: explicit local file deletion runs at once.
+    # Ambiguous filenames, folders and system paths remain unsupported.
     delete_latest=(r"(?:elimina|eliminar|borra|borrar)\s+"
         r"(?:el|la)?\s*(?:ultimo|ultima|mas reciente)\s+"
         r"(?:(?:archivo|fichero)\s+)?"
         r"(comprimido|zip|rar|pdf|excel|imagen|foto|texto|txt|archivo|fichero|documento)\s+"
-        r"(?:de|desde|en)\s+(?:(?:la|el)\s+)?(?:(?:carpeta de|carpeta)\s+)?"
+        r"(?:de|del|desde|en)\s+(?:(?:la|el)\s+)?(?:(?:carpeta de|carpeta)\s+)?"
         +LOC)
     m=re.fullmatch(delete_latest,t)
     if m:
@@ -72,7 +72,7 @@ def parse_pc_command(text: str):
 
     delete_named=(r"(?:elimina|eliminar|borra|borrar)\s+"
         r"(?:(?:el|la)\s+)?(?:archivo|fichero)\s+(.+?)\s+"
-        r"(?:de|desde|en)\s+(?:(?:la|el)\s+)?"+LOC)
+        r"(?:de|del|desde|en)\s+(?:(?:la|el)\s+)?"+LOC)
     m=re.fullmatch(delete_named,t)
     if m:
         name,folder=m.groups()

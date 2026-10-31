@@ -124,7 +124,7 @@ def prepare_transfer(args: dict, config: dict) -> dict:
 
 
 def prepare_delete(args: dict, config: dict) -> dict:
-    """Freeze the target before asking for a separate spoken confirmation.
+    """Freeze the target before directly moving it to the Recycle Bin.
 
     Only files directly inside an explicitly named user folder are accepted.
     Directory trees and symlinks are never deleted by a voice command.
@@ -144,8 +144,7 @@ def prepare_delete(args: dict, config: dict) -> dict:
 
 def perform(action: str, args: dict, config: dict) -> str:
     if action == "pc_delete":
-        # Only run after VoiceDialogue receives an unambiguous spoken "sí"
-        # for a specific snapshot and the executor marks it confirmed.
+        # Only a fresh, frozen file snapshot is eligible for deletion.
         if (args.get("pick")!="name" or
                 "size" not in args or "mtime_ns" not in args):
             raise PCFileError("Falta la selección verificada del archivo.")
@@ -154,7 +153,7 @@ def perform(action: str, args: dict, config: dict) -> str:
         now=source.stat()
         if (str(now.st_size)!=args["size"] or
                 str(now.st_mtime_ns)!=args["mtime_ns"]):
-            raise PCFileError("El archivo cambió desde la confirmación. No lo eliminé.")
+            raise PCFileError("El archivo cambió desde la orden. No lo eliminé.")
         try:
             from send2trash import send2trash
         except ImportError as exc:
