@@ -172,6 +172,14 @@ def _foreground_is_google_browser() -> bool:
     from ctypes import wintypes
     user32 = ctypes.windll.user32
     kernel32 = ctypes.windll.kernel32
+    # Explicit Win64 signatures: default ctypes pointer values could be truncated.
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.QueryFullProcessImageNameW.argtypes = [
+        wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
     hwnd = user32.GetForegroundWindow()
     if not hwnd:
         return False
