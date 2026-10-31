@@ -13,6 +13,7 @@ class BrowserBridge:
         self.profile=profile
         self.p=None
         self.context=None
+        self.prepared=None
     def _ensure(self):
         if self.context: return
         try:
@@ -69,6 +70,55 @@ class BrowserBridge:
             editor.fill(prompt,timeout=10000)
             editor.press('Enter')
         return 'Enviado al navegador; comprueba la respuesta en la pagina.'
+    def prepare_chat(self, provider, project_url=""):
+        """Opens a separate browser tab for a new conversation.
+
+        For a project, this uses the exact configured project page. We never
+        fall back to a generic ChatGPT chat if the project cannot be opened.
+        """
+        from urllib.parse import urlparse
+        if provider not in URLS:
+            raise ValueError("ChatGPT o Claude no reconocido.")
+        self._ensure()
+        if project_url:
+            address = urlparse(project_url)
+            if address.scheme != "https" or address.hostname not in HOSTS[provider]:
+                raise ValueError("La URL del proyecto no corresponde al proveedor solicitado.")
+            page = self.context.new_page()
+            page.goto(project_url, wait_until="domcontentloaded", timeout=30000)
+        else:
+            page = self.page(provider, new=True)
+        self.prepared = (provider, page)
+        return "Pestaña abierta. Dicta el mensaje."
+
+    def send_prepared(self, provider, prompt):
+        if not prompt or not prompt.strip():
+            raise ValueError("No hay texto para dictar.")
+        if self.prepared is None or self.prepared[0] != provider:
+            raise BrowserUnavailable("Primero abre el chat o proyecto con HOVER.")
+        page = self.prepared[1]
+        if page.is_closed():
+            raise BrowserUnavailable("El chat preparado se cerró.")
+        # UI layouts can vary; fail closed instead of typing into the wrong field.
+        selectors = ['[contenteditable="true"][role="textbox"]',
+                     '#prompt-textarea', 'div[contenteditable="true"]', 'textarea']
+        editor = None
+        for selector in selectors:
+            locator = page.locator(selector).last
+            if locator.count() and locator.is_visible():
+                editor = locator
+                break
+        if editor is None:
+            raise BrowserUnavailable(
+                "No encontré el cuadro del chat. Inicia sesión y comprueba que estás "
+                "dentro del proyecto correcto."
+            )
+        editor.fill(prompt, timeout=10000)
+        editor.press("Enter")
+        self.prepared = None
+        return "Escribí el mensaje y pulsé Enviar; verifica el resultado en el navegador."
+
     def close(self):
+        self.prepared=None
         if self.context:self.context.close();self.context=None
         if self.p:self.p.stop();self.p=None
