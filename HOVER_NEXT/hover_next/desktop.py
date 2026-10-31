@@ -162,3 +162,58 @@ def open_document(name: str = "") -> str:
         raise ActionUnavailable("Solo abro documentos de formatos permitidos, no programas ni scripts.")
     os.startfile(str(target))
     return f"Documento abierto: {target.name}"
+
+
+def _foreground_is_google_browser() -> bool:
+    """Check title and executable; never send Ctrl+W to an arbitrary app."""
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return False
+    titlebuf = ctypes.create_unicode_buffer(512)
+    user32.GetWindowTextW(hwnd, titlebuf, 512)
+    title = titlebuf.value.casefold().strip()
+    # Do not treat every Chrome window as Google (its title always has 'Chrome').
+    if "google" not in title and "gmail" not in title:
+        return False
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    if not pid.value:
+        return False
+    # PROCESS_QUERY_LIMITED_INFORMATION
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    process = kernel32.OpenProcess(0x1000, False, pid.value)
+    if not process:
+        return False
+    try:
+        filename = ctypes.create_unicode_buffer(1024)
+        length = wintypes.DWORD(len(filename))
+        ok = kernel32.QueryFullProcessImageNameW(process, 0, filename, ctypes.byref(length))
+        if not ok:
+            return False
+        executable = Path(filename.value).name.casefold()
+        return executable in {"chrome.exe","msedge.exe","firefox.exe","brave.exe","opera.exe"}
+    finally:
+        kernel32.CloseHandle(process)
+
+
+def close_google_tab() -> str:
+    if sys.platform != "win32":
+        raise ActionUnavailable("Cerrar una pestaña requiere Windows.")
+    if not _foreground_is_google_browser():
+        raise ActionUnavailable(
+            "No cerraré otra aplicación: primero deja al frente la pestaña de Google."
+        )
+    import ctypes
+    user32 = ctypes.windll.user32
+    VK_CONTROL, VK_W = 0x11, 0x57
+    user32.keybd_event(VK_CONTROL, 0, 0, 0)
+    user32.keybd_event(VK_W, 0, 0, 0)
+    user32.keybd_event(VK_W, 0, 2, 0)
+    user32.keybd_event(VK_CONTROL, 0, 2, 0)
+    return "Se envió cerrar pestaña de Google al navegador activo."
