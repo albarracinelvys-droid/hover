@@ -81,6 +81,11 @@ class OAuthLocalTests(unittest.TestCase):
         auth.disconnect("all")
         self.assertFalse(any(auth.status().values()))
 
+    def _mock_save_token(self, service, credentials):
+        path=auth._token_path(service)
+        path.parent.mkdir(parents=True,exist_ok=True)
+        path.write_bytes(b"SIMULATED-DPAPI-FILE")
+
     def test_install_flow_requests_exact_service_scopes(self):
         auth.CLIENT.write_text(
             '{"installed":{"client_id":"fake-client-id","client_secret":"not-real"}}',
@@ -89,7 +94,7 @@ class OAuthLocalTests(unittest.TestCase):
         fake_flow.run_local_server.return_value=MagicMock(
             to_json=lambda:'{"token":"private"}')
         with patch.object(auth,"sys") as sysfake, \
-             patch.object(auth,"_save") as save, \
+             patch.object(auth,"_save",side_effect=self._mock_save_token) as save, \
              patch.dict("sys.modules",{
                  "google_auth_oauthlib":MagicMock(),
                  "google_auth_oauthlib.flow":MagicMock(
@@ -100,6 +105,70 @@ class OAuthLocalTests(unittest.TestCase):
             auth.connect("calendar")
         save.assert_called_once()
         self.assertEqual(save.call_args.args[0],"calendar")
+        self.assertEqual(set(auth._requested_scopes("calendar")), {
+            "openid", "email",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/calendar.events.readonly",
+        })
+
+    def test_google_oauth_asks_for_identity_aliases(self):
+        auth.CLIENT.write_text(
+            '{"installed":{"client_id":"mock","client_secret":"mock"}}',
+            encoding="utf-8")
+        fake_flow=MagicMock()
+        factory=MagicMock(return_value=fake_flow)
+        with patch.object(auth,"sys") as fake_sys, \
+             patch.object(auth,"_save",side_effect=self._mock_save_token), \
+             patch.dict("sys.modules",{
+                 "google_auth_oauthlib":MagicMock(),
+                 "google_auth_oauthlib.flow":MagicMock(
+                     InstalledAppFlow=MagicMock(
+                         from_client_secrets_file=factory))
+             }):
+            fake_sys.platform="win32"
+            auth.connect("drive")
+        requested=factory.call_args.kwargs["scopes"]
+        self.assertEqual(set(requested), set(auth._requested_scopes("drive")))
+
+    def test_successful_browser_redirect_does_not_imply_saved_token(self):
+        auth.CLIENT.write_text(
+            '{"installed":{"client_id":"mock","client_secret":"mock"}}',
+            encoding="utf-8")
+        fake_flow=MagicMock()
+        fake_factory=MagicMock(return_value=fake_flow)
+        with patch.object(auth,"sys") as fake_sys, \
+             patch.object(auth,"_save",side_effect=ImportError("win32crypt")), \
+             patch.dict("sys.modules",{
+                 "google_auth_oauthlib":MagicMock(),
+                 "google_auth_oauthlib.flow":MagicMock(
+                     InstalledAppFlow=MagicMock(
+                         from_client_secrets_file=fake_factory))
+             }):
+            fake_sys.platform="win32"
+            with self.assertRaisesRegex(auth.GoogleAuthError,"pywin32"):
+                auth.connect("drive")
+        self.assertFalse(auth.connected("drive"))
+        self.assertIn("Vuelve a HOVER",
+                      fake_flow.run_local_server.call_args.kwargs["success_message"])
+
+    def test_scope_mismatch_reports_specific_error_without_leaking_code(self):
+        auth.CLIENT.write_text(
+            '{"installed":{"client_id":"mock","client_secret":"mock"}}',
+            encoding="utf-8")
+        fake_flow=MagicMock()
+        fake_flow.run_local_server.side_effect=Warning(
+            "Scope has changed from x to y, code=TOP-SECRET")
+        with patch.object(auth,"sys") as fake_sys, \
+             patch.dict("sys.modules",{
+                 "google_auth_oauthlib":MagicMock(),
+                 "google_auth_oauthlib.flow":MagicMock(
+                     InstalledAppFlow=MagicMock(
+                         from_client_secrets_file=MagicMock(return_value=fake_flow)))
+             }):
+            fake_sys.platform="win32"
+            with self.assertRaisesRegex(auth.GoogleAuthError,"permisos") as ctx:
+                auth.connect("drive")
+        self.assertNotIn("TOP-SECRET",str(ctx.exception))
 
 
 class GoogleVoiceTests(unittest.TestCase):
@@ -270,6 +339,21 @@ class GoogleIpcTests(unittest.TestCase):
         connect.assert_called_once_with("gmail")
         disconnect.assert_called_once_with("gmail")
         self.assertIn("gmail:",result)
+
+    def test_google_ipc_reports_safe_token_save_failure(self):
+        with patch("hover_next.google_auth._client_path",
+                   return_value=Path("oauth.json")), \
+             patch("hover_next.google_auth.status",return_value={
+                 "drive":False,"calendar":False,"gmail":False,"docs":False}), \
+             patch("hover_next.google_auth.connect",
+                   side_effect=auth.GoogleAuthError(
+                       "Google autorizó, pero falta pywin32/win32crypt.")), \
+             patch("hover_next.google_ipc.write_status") as write, \
+             patch("hover_next.ui_bridge.publish") as publish:
+            result=ipc.execute_control("connect","drive")
+        self.assertIn("pywin32",result)
+        self.assertEqual(publish.call_args.args[0],"error")
+        self.assertIn("pywin32",write.call_args.args[0])
 
     def test_missing_oauth_client_reports_once_and_skips_all_services(self):
         with patch("hover_next.google_auth._client_path",
