@@ -1,3 +1,39 @@
+## Google OAuth 2.0 — HOVER v4.6
+
+La integración opcional de Gmail, Drive, Calendar y Docs ya está en el
+motor Python y en la nueva interfaz **Atajos → GOOGLE**.
+
+**Configuración:** lee la
+[guía completa Google OAuth](GUIA_GOOGLE_OAUTH.md).
+Necesitarás crear tu propio cliente OAuth de **Aplicación de escritorio**
+en Google Cloud y autorizar tu cuenta Google en el navegador. Ningún token
+ni archivo OAuth real está publicado en GitHub.
+
+```powershell
+cd C:\Users\gomez\hover
+git pull origin main
+cd .\HOVER_NEXT
+.\INSTALAR_GOOGLE_HOVER.bat
+.\INICIAR_HOVER.bat
+```
+
+En Windhawk debes reemplazar el código del mod actual por
+[`HOVER_v4_6_GOOGLE_OAUTH_WINDHAWK.wh.cpp`](../HOVER_v4_6_GOOGLE_OAUTH_WINDHAWK.wh.cpp)
+y compilar con Ctrl+B. El motor Python y la isla se actualizan
+separadamente; `git pull` solo actualiza los archivos locales.
+
+Las búsquedas públicas siguen utilizando Google Search. Al conectar tu
+cuenta HOVER también consulta los servicios privados autorizados y muestra
+coincidencias locales; solo envía metadatos a ChatGPT/Claude cuando lo
+pides explícitamente y confirmas la transferencia. Las sesiones de ChatGPT
+y Claude siguen siendo independientes en Chrome.
+
+**Estado:** tests unitarios e integración simulada con APIs; el inicio
+de sesión OAuth y el uso de servicios reales solo pueden validarse
+después de conectar tu cuenta en Windows.
+
+---
+
 ## Corrección inmediata: reconocimiento correcto pero sin acciones
 
 Los registros mostraron que HOVER transcribía «Hover. ChatGPT»,
