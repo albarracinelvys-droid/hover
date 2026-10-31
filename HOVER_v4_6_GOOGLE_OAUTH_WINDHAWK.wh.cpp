@@ -528,6 +528,45 @@ std::wstring FavoritePathFile() {
     CreateDirectoryW(dir.c_str(),nullptr);
     return dir+L"\\carpeta_favorita.txt";
 }
+// The position is stored separately from Windhawk settings so a drag is
+// preserved across explorer.exe restarts. Nothing is written until release.
+std::wstring IslandPositionFile() {
+    const auto favorite=FavoritePathFile();
+    if(favorite.empty())return L"";
+    const auto separator=favorite.find_last_of(L'\\');
+    if(separator==std::wstring::npos)return L"";
+    return favorite.substr(0,separator+1)+L"posicion_isla.txt";
+}
+void LoadIslandPosition() {
+    const auto path=IslandPositionFile();if(path.empty())return;
+    HANDLE file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,
+                             OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(file==INVALID_HANDLE_VALUE)return;
+    char data[64]{};DWORD received=0;
+    const BOOL ok=ReadFile(file,data,sizeof(data)-1,&received,nullptr);
+    CloseHandle(file);
+    int dx=0,dy=0;
+    if(ok && received>0 && std::sscanf(data,"%d %d",&dx,&dy)==2 &&
+       dx>=-10000 && dx<=10000 && dy>=-10000 && dy<=10000){
+        g_islandShiftX=dx;
+        g_islandShiftY=dy;
+    }
+}
+void SaveIslandPosition() {
+    const auto path=IslandPositionFile();if(path.empty())return;
+    HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,FILE_SHARE_READ,nullptr,
+                             CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(file==INVALID_HANDLE_VALUE)return;
+    char data[64]{};
+    const int count=std::snprintf(data,sizeof(data),"%d %d",
+                                  g_islandShiftX,g_islandShiftY);
+    if(count>0 && count<int(sizeof(data))){
+        DWORD written=0;
+        WriteFile(file,data,DWORD(count),&written,nullptr);
+    }
+    CloseHandle(file);
+}
+
 void SaveFavoriteFolder() {
     std::wstring cfg=FavoritePathFile(); if(cfg.empty())return;
     HANDLE f=CreateFileW(cfg.c_str(),GENERIC_WRITE,FILE_SHARE_READ,nullptr,
@@ -2462,7 +2501,7 @@ LRESULT CALLBACK WndProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
                 ReleaseCapture();
                 if(releasedGrip){
                     // Never treat eye-grip movement as a page swipe or click.
-                    (void)movedGrip;
+                    if(movedGrip)SaveIslandPosition();
                     return 0;
                 }
                 const int dx=mouse.x-g_dragOrigin.x;
@@ -2513,9 +2552,13 @@ DWORD WINAPI UIThreadMain(LPVOID){
     wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
     if(!RegisterClassExW(&wc)){GdiplusShutdown(token);if(SUCCEEDED(hr))OleUninitialize();return 0;}
     RECT m=PrimaryBounds();
+    LoadIslandPosition();
     HWND hwnd=CreateWindowExW(WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_TOPMOST,
         kClass,L"Isla dinamica Premium",WS_POPUP,
-        (m.left+m.right-kMiniWidth)/2+g_xOffset,m.top+g_topGap,
+        ClampInt((m.left+m.right-kMiniWidth)/2+g_xOffset+g_islandShiftX,
+                 m.left,std::max(m.left,m.right-kMiniWidth)),
+        ClampInt(m.top+g_topGap+g_islandShiftY,m.top,
+                 std::max(m.top,m.bottom-kMiniHeight)),
         kMiniWidth,kMiniHeight,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     if(hwnd) {
         g_hwnd=hwnd;
