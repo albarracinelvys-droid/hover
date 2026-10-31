@@ -22,6 +22,8 @@ def save_project(config_file: Path, provider: str, name: str, url: str):
     parsed = urlparse(url.strip())
     if parsed.scheme != "https" or parsed.hostname not in HOSTS[provider] or not parsed.path.strip("/"):
         raise ValueError("Pega la URL HTTPS completa de un proyecto de ChatGPT o Claude.")
+    if provider == "chatgpt" and "/g/g-p-" not in parsed.path:
+        raise ValueError("Pega la URL de la página del proyecto Zap, no la URL de un chat individual.")
     config_file.parent.mkdir(parents=True, exist_ok=True)
     config = json.loads(config_file.read_text("utf-8")) if config_file.exists() else {}
     config.setdefault("projects", {}).setdefault(provider, {})[name] = url.strip()
