@@ -61,9 +61,20 @@ def execute_control(action,service):
         publish("thinking","Autorización de Google: "+key,3)
         write_status("Autoriza "+key+" en el navegador de Google")
         try:
-            outcomes.append(google_auth.connect(key))
+            # One account for all services: do not silently mix a work Drive
+            # with someone else's personal Gmail.
+            already=[k for k,active in google_auth.status().items()
+                     if active and k!=key]
+            existing_email=(google_auth.account_email(already[0]).casefold()
+                            if already else "")
+            google_auth.connect(key)
+            new_email=google_auth.account_email(key).casefold()
+            if not new_email or (existing_email and new_email!=existing_email):
+                google_auth.disconnect(key)
+                raise google_auth.GoogleAuthError(
+                    "La cuenta Google no coincide. Elige la misma cuenta en todos los servicios.")
+            outcomes.append(key+" conectado como "+new_email)
         except Exception as exc:
-            # Do not print access tokens or raw Google HTTP responses.
             outcomes.append(f"{key}: {type(exc).__name__}. Revisa el archivo OAuth y la cuenta.")
         write_status(outcomes[-1])
     final="; ".join(outcomes)
