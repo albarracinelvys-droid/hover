@@ -26,15 +26,10 @@ class VoiceDialogue:
     dictated in the next utterance without repeating the wake word.
     Unrequested background audio never creates files or repositories.
     """
-    def __init__(self, execute, send_dictated, clock=time.monotonic,
-                 *, prepare_delete=None, execute_confirmed=None):
+    def __init__(self, execute, send_dictated, clock=time.monotonic):
         self.execute = execute
         self.send_dictated = send_dictated
         self.clock = clock
-        self.prepare_delete = prepare_delete
-        self.execute_confirmed = execute_confirmed
-        self.pending_delete = None
-        self.delete_until = 0.0
         self.command_until = 0.0
         self.ptt_until = 0.0
         self.dictation_provider = ""
@@ -94,33 +89,6 @@ class VoiceDialogue:
         from .wake import normalize_speech
         normalized=normalize_speech(spoken)
         remainder=extract_wake(spoken)
-        # A destructive request never runs on its first utterance.
-        # A separate, exact spoken "sí" during this short window is required.
-        if self.pending_delete is not None:
-            response=normalize_speech(remainder if remainder is not None else spoken)
-            if now>=self.delete_until:
-                self.pending_delete=None
-                publish("ok","Eliminación cancelada: confirmación vencida.",3)
-                print("[papelera] Confirmación caducada; nada eliminado.",flush=True)
-                return "cancel"
-            if response in ("no","cancela","cancelar","no elimines","no borrar"):
-                self.pending_delete=None
-                publish("ok","Eliminación cancelada.",3)
-                print("[papelera] Cancelado por voz.",flush=True)
-                return "cancel"
-            if response in ("si","si confirmo","confirmo"):
-                confirmed=self.pending_delete
-                self.pending_delete=None  # Never replay an authorization.
-                self.delete_until=0.0
-                if self.execute_confirmed is None:
-                    publish("error","Falta el ejecutor seguro de la Papelera.")
-                    return "failed"
-                result=self.execute_confirmed(confirmed)
-                return "action" if result is not None else "failed"
-            # Ignore unrelated voice while waiting; do not accidentally run it.
-            publish("listening","Para eliminar di SÍ; para cancelar di NO",3)
-            print("[papelera] Espero solo 'sí' o 'no'.",flush=True)
-            return "waiting"
         if self.pending_kind and now>=self.pending_until:
             self.pending_kind=""
         if self.dictation_provider and now>=self.dictation_until:
@@ -213,31 +181,6 @@ class VoiceDialogue:
             print("[accion] Sin coincidencia:",utterance,flush=True)
             return "unknown"
         print("[accion]",command.action,command.args,flush=True)
-        if command.action=="pc_delete":
-            # Freeze an exact filename before speaking confirmation.
-            if self.prepare_delete is None or self.execute_confirmed is None:
-                publish("error","La confirmación por voz de la Papelera no está disponible.")
-                return "failed"
-            try:
-                frozen=self.prepare_delete(command)
-            except Exception as exc:
-                print("[papelera] No se pudo preparar:",type(exc).__name__,
-                      str(exc),flush=True)
-                publish("error","No encontré un archivo válido para eliminar.",3)
-                return "failed"
-            if (frozen.action!="pc_delete" or
-                    not frozen.requires_confirmation or
-                    frozen.args.get("pick")!="name"):
-                publish("error","La eliminación no es válida.",3)
-                return "failed"
-            self.pending_delete=frozen
-            self.delete_until=self.clock()+20.0
-            name=frozen.args["name"]
-            question=(f"¿Enviar {name} a la Papelera? "
-                      "Responde SÍ o NO por voz.")
-            publish("listening",question,3)
-            print("[papelera]",question,flush=True)
-            return "waiting"
         # The ASR sometimes says "que ya me" or "que llame" for a repo name.
         # Do not create a possibly misnamed repo. Ask for the name alone.
         from .wake import normalize_speech
@@ -284,7 +227,7 @@ def _hotkey_pressed():
 def run(executor, *, engine="auto", model="small",
         device=None, threshold=0.0008):
     import sounddevice as sd
-    from .app import run_one, run_confirmed_delete
+    from .app import run_one
 
     publish("thinking","Cargando motor local")
     recognizer = create_recognizer(engine, model)
@@ -315,15 +258,9 @@ def run(executor, *, engine="auto", model="small",
             print("[error]",type(exc).__name__,str(exc),flush=True)
             return "failed"
 
-    def freeze_delete(intent):
-        from .pc_files import prepare_delete
-        args=prepare_delete(intent.args,executor.config)
-        return Intent(intent.action,intent.provider,args,intent.requires_confirmation)
-
     dialogue = VoiceDialogue(
         lambda command:run_one(command,executor,voice_mode=True),
-        send_dictated,prepare_delete=freeze_delete,
-        execute_confirmed=lambda intent:run_confirmed_delete(intent,executor))
+        send_dictated)
 
     def recognizer_worker():
         try:
