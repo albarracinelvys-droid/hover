@@ -89,15 +89,25 @@ def main():
         test_microphone(device=args.mic,threshold=args.threshold)
         return
     executor = Executor()
+    if args.voice:
+        from .single_instance import AlreadyRunning, voice_instance
+        from .voice_coucou import run
+        preferred=executor.config.get("preferred_mic") if args.mic is None else args.mic
+        mic=int(preferred) if preferred is not None else None
+        try:
+            with voice_instance():
+                publish("idle", "HOVER listo: silencioso")
+                try:
+                    run(executor,engine=args.engine,model=args.model,
+                        device=mic,threshold=args.threshold)
+                finally:
+                    publish("idle", "")
+        except AlreadyRunning as exc:
+            print("[HOVER]",exc,flush=True)
+        return
     publish("idle", "HOVER listo: silencioso")
     try:
-        if args.voice:
-            from .voice_coucou import run
-            preferred=executor.config.get("preferred_mic") if args.mic is None else args.mic
-            mic=int(preferred) if preferred is not None else None
-            run(executor,engine=args.engine,model=args.model,
-                device=mic,threshold=args.threshold)
-        elif args.text:
+        if args.text:
             run_one(args.text,executor)
         else:
             print("HOVER listo. Escribe un comando o salir.")
@@ -111,11 +121,8 @@ def main():
                 if command:
                     run_one(command,executor)
     finally:
-        publish("idle", "")
-        # Playwright synchronous contexts belong to their creating thread.
-        # In voice mode, the ASR worker owns and closes the browser there.
-        if not args.voice:
-            executor.browser.close()
+        publish("idle","")
+        executor.browser.close()
 
 
 if __name__ == "__main__":
