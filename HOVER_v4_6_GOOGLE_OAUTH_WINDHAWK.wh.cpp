@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id hover-island-v38-hardware
-// @name HOVER v4.6 - Google OAuth en Atajos
-// @description Isla original con Google OAuth, Gmail, Drive, Calendar y Docs via motor Python HOVER.
-// @version 4.6.0
+// @name HOVER v4.7 - Calendar interactivo y Google OAuth
+// @description Calendario interactivo con eventos de Google, detalles por día y enlaces, vía motor Python local.
+// @version 4.7.0
 // @author HOVER - version de prueba
 // @include explorer.exe
 // @architecture x86-64
@@ -29,7 +29,7 @@
 - Carpeta favorita se guarda en AppData\HOVER, clic derecho sobre Carpeta para cambiar.
 - VOZ: asistente Python 4.1 con alias foneticos para nombres ingleses (requiere Vosk espanol).
 - PESTANAS: adicionales configurables por voz (maximo 5), enlaces HTTP(S) seguros.
-- CALENDARIO: crea archivos .ics revisables; no escribe sin permiso en servicios externos.
+- CALENDARIO: sincroniza metadatos de Google Calendar desde HOVER Python, marca dias, permite ver y abrir eventos y crear nuevos en Google Calendar.
 
 Desactiva otros mods de isla para evitar dos superposiciones.
 La visualizacion del portapapeles puede desactivarse por privacidad.
@@ -96,6 +96,7 @@ La visualizacion del portapapeles puede desactivarse por privacidad.
 #include <unordered_map>
 #include <utility>
 #include <cstdint>
+#include <cstdio>
 #include <iphlpapi.h>
 #include <ifdef.h>
 #include <pdh.h>
@@ -160,6 +161,9 @@ unsigned long g_bridgeCommandSerial=0;
 bool g_drag=false;
 POINT g_dragOrigin{};
 int g_clipAttempts=0, g_monthOffset=0;
+int g_calendarSelectedDay=0,g_calendarSelectedIndex=0;
+bool g_calendarDetailsOpen=false;
+ULONGLONG g_calendarLastRead=0;
 int g_hoverAction=-1;
 std::wstring g_lastClip;
 ULONGLONG g_clipTick=0;
@@ -180,6 +184,12 @@ ULONGLONG g_feedbackUntil=0;
 std::string g_lastVoiceSerial;
 struct VoiceTab {std::wstring title; std::wstring url;};
 std::vector<VoiceTab> g_voiceTabs;
+struct CalendarEvent {
+    int year=0,month=0,day=0;
+    std::wstring title,url;
+};
+std::vector<CalendarEvent> g_calendarEvents;
+std::wstring g_calendarStatus=L"sin datos";
 std::vector<HANDLE> g_copyThreads; // se esperan antes de descargar el mod
 
 
@@ -780,6 +790,64 @@ void ReadVoiceTabs() {
     if(g_previousPage>=maxPage)g_previousPage=g_currentPage;
 }
 
+void ReadCalendarBridge() {
+    // Read only local metadata written by Python. No OAuth tokens or network.
+    std::string blob=ReadSmallFile(L"calendar_events.tsv",262144);
+    static std::string previous;
+    if(blob==previous)return;
+    previous=blob;
+    std::vector<CalendarEvent> next;
+    std::wstring state=L"sin datos";
+    size_t pos=0;
+    while(pos<blob.size() && next.size()<250){
+        size_t end=blob.find('\n',pos);
+        if(end==std::string::npos)end=blob.size();
+        std::string line=blob.substr(pos,end-pos);
+        if(!line.empty()&&line.back()=='\r')line.pop_back();
+        size_t first=line.find('\t');
+        if(first!=std::string::npos){
+            std::string rawDate=line.substr(0,first);
+            if(rawDate=="status"){
+                state=DecodeUtf8(line.substr(first+1));
+            } else {
+                size_t second=line.find('\t',first+1);
+                if(second!=std::string::npos && rawDate.size()==10) {
+                    int yr=0,mo=0,dy=0;
+                    if(std::sscanf(rawDate.c_str(),"%4d-%2d-%2d",&yr,&mo,&dy)==3 &&
+                       yr>=2020 && yr<2100 && mo>=1 && mo<=12 && dy>=1 && dy<=31){
+                        std::wstring title=DecodeUtf8(line.substr(first+1,second-first-1));
+                        std::wstring url=DecodeUtf8(line.substr(second+1));
+                        if(title.size()>95)title.resize(95);
+                        if(url.rfind(L"https://calendar.google.com/",0)!=0)url.clear();
+                        if(!title.empty())next.push_back({yr,mo,dy,title,url});
+                    }
+                }
+            }
+        }
+        pos=end+1;
+    }
+    g_calendarStatus=state;
+    g_calendarEvents=std::move(next);
+    if(g_calendarSelectedIndex>=int(g_calendarEvents.size()))g_calendarSelectedIndex=0;
+}
+
+void VisibleCalendarMonth(int& year,int& month) {
+    SYSTEMTIME st{};GetLocalTime(&st);
+    int m=int(st.wMonth)-1+g_monthOffset;
+    year=st.wYear;
+    while(m<0){m+=12;--year;}
+    while(m>=12){m-=12;++year;}
+    month=m+1;
+}
+
+std::vector<const CalendarEvent*> DayEvents(int year,int month,int day) {
+    std::vector<const CalendarEvent*> result;
+    for(const auto& event:g_calendarEvents)
+        if(event.year==year && event.month==month && event.day==day)
+            result.push_back(&event);
+    return result;
+}
+
 void ReadVoiceBridge() {
     std::string blob=ReadSmallFile(L"voice_ui.txt",2048);
     if(blob.empty())return;
@@ -1159,11 +1227,9 @@ void PageCalendar(Graphics& g) {
     static const wchar_t* months[]={L"ENERO",L"FEBRERO",L"MARZO",L"ABRIL",L"MAYO",L"JUNIO",L"JULIO",L"AGOSTO",L"SEPTIEMBRE",L"OCTUBRE",L"NOVIEMBRE",L"DICIEMBRE"};
     static const wchar_t* weekdays[]={L"LU",L"MA",L"MI",L"JU",L"VI",L"SA",L"DO"};
     SYSTEMTIME st{};GetLocalTime(&st);
-    int mo=int(st.wMonth)-1+g_monthOffset;
-    int year=st.wYear;
-    while(mo<0){mo+=12;year--;}
-    while(mo>=12){mo-=12;year++;}
-    int month=mo+1;
+    int year=0,month=0;
+    VisibleCalendarMonth(year,month);
+    int mo=month-1;
     SYSTEMTIME first{};first.wYear=WORD(year);first.wMonth=WORD(month);first.wDay=1;
     FILETIME ft{};
     if(SystemTimeToFileTime(&first,&ft))FileTimeToSystemTime(&ft,&first);
@@ -1172,6 +1238,7 @@ void PageCalendar(Graphics& g) {
     Round(g,17,114,502,223,21,Color(200,19,22,31),Color(0,0,0,0),0.0f);
     wchar_t monthTitle[80]{};swprintf(monthTitle,80,L"%ls  %d",months[mo],year);
     Text(g,monthTitle,33,123,278,27,18,Color(255,248,248,252),true);
+    Button(g,306,119,96,36,L"+ NUEVO",true,654);
     Button(g,407,119,43,36,L"<",true,401);
     Button(g,459,119,43,36,L">",true,402);
     for(int col=0;col<7;col++) Text(g,weekdays[col],36+col*68,159,53,20,11,Color(230,165,169,182),true,true);
@@ -1183,6 +1250,36 @@ void PageCalendar(Graphics& g) {
         bool today=day==st.wDay&&month==st.wMonth&&year==st.wYear;
         if(today)Round(g,x+8,y+1,37,22,11,Color(230,ac.GetR(),ac.GetG(),ac.GetB()),Color(40,255,255,255));
         Text(g,number,x,y,53,24,12,today?Color(255,5,7,10):Color(255,231,233,241),today,true);
+        if(!DayEvents(year,month,day).empty()){
+            SolidBrush eventMark(Color(245,ac.GetR(),ac.GetG(),ac.GetB()));
+            g.FillEllipse(&eventMark,x+24.0f,y+21.0f,4.5f,4.5f);
+        }
+    }
+    // Only user clicks open details; Calendar never expands the notch itself.
+    if(g_calendarDetailsOpen && g_calendarSelectedDay>0){
+        auto dayEvents=DayEvents(year,month,g_calendarSelectedDay);
+        Round(g,32,228,471,105,15,Color(251,34,37,47),
+              Color(105,165,175,188),1.0f);
+        wchar_t selected[60]{};
+        swprintf(selected,60,L"%d/%d/%d",g_calendarSelectedDay,month,year);
+        Text(g,selected,46,235,190,18,12,Color(245,242,245,249),true);
+        if(dayEvents.empty()){
+            Text(g,g_calendarStatus==L"ok"?L"Sin eventos este dia":
+                 L"Conecta Calendar en Atajos para cargar tus eventos",
+                 46,259,425,23,12,Color(245,201,207,218),false,false,true);
+        } else {
+            if(g_calendarSelectedIndex>=int(dayEvents.size()))g_calendarSelectedIndex=0;
+            const auto& event=*dayEvents[g_calendarSelectedIndex];
+            Text(g,event.title,46,255,444,26,14,Color(255,243,247,252),true);
+            wchar_t count[55]{};
+            swprintf(count,55,L"Evento %d de %d",g_calendarSelectedIndex+1,
+                     int(dayEvents.size()));
+            Text(g,count,46,287,164,20,10.5f,Color(200,195,205,220));
+            if(!event.url.empty())
+                Button(g,319,289,121,32,L"ABRIR",true,650);
+            if(dayEvents.size()>1)Button(g,229,289,77,32,L"SIG.",true,653);
+        }
+        Button(g,450,236,41,30,L"X",true,652);
     }
 }
 
@@ -1399,7 +1496,31 @@ int HitAction(float x,float y) {
             if(x>=172&&x<265)return 106;
         }
     } else if(g_currentPage==2){
-        if(y>=119&&y<155){if(x>=407&&x<450)return 401;if(x>=459&&x<502)return 402;}
+        if(g_calendarDetailsOpen){
+            if(y>=236&&y<268&&x>=447&&x<495)return 652;
+            if(y>=289&&y<324){
+                if(x>=319&&x<445)return 650;
+                if(x>=229&&x<309)return 653;
+            }
+            if(y>=228&&y<334&&x>=32&&x<503)return -1;
+        }
+        if(y>=119&&y<155){
+            if(x>=306&&x<402)return 654;
+            if(x>=407&&x<450)return 401;
+            if(x>=459&&x<502)return 402;
+        }
+        if(y>=184&&y<334&&x>=36&&x<510){
+            int year=0,month=0;VisibleCalendarMonth(year,month);
+            SYSTEMTIME f{};f.wYear=WORD(year);f.wMonth=WORD(month);f.wDay=1;
+            FILETIME stamp{};
+            if(SystemTimeToFileTime(&f,&stamp))FileTimeToSystemTime(&stamp,&f);
+            int offset=(int(f.wDayOfWeek)+6)%7;
+            int row=int((y-184)/25),col=int((x-36)/68);
+            if(col>=0&&col<7&&row>=0&&row<6){
+                int day=row*7+col-offset+1;
+                if(day>=1&&day<=MonthDays(year,month))return 600+day;
+            }
+        }
     } else if(g_currentPage==3) {
         if(y>=326.0f&&y<355.0f&&x>=24.0f&&x<502.0f)
             return 208;
@@ -1886,8 +2007,36 @@ void Execute(HWND hwnd,int action) {
     }
     if(action>=101&&action<=108){Command(action-100);return;}
     if(action==202){Command(1);return;}
-    if(action==401){g_monthOffset=ClampInt(g_monthOffset-1,-24,24);return;}
-    if(action==402){g_monthOffset=ClampInt(g_monthOffset+1,-24,24);return;}
+    if(action>=601&&action<=631){
+        g_calendarSelectedDay=action-600;
+        g_calendarSelectedIndex=0;
+        g_calendarDetailsOpen=true;
+        return;
+    }
+    if(action==652){g_calendarDetailsOpen=false;return;}
+    if(action==654){
+        OpenUrl(L"https://calendar.google.com/calendar/u/0/r/eventedit");
+        return;
+    }
+    if(action==650){
+        int year=0,month=0;VisibleCalendarMonth(year,month);
+        auto events=DayEvents(year,month,g_calendarSelectedDay);
+        if(!events.empty() && g_calendarSelectedIndex<int(events.size())){
+            const auto& url=events[g_calendarSelectedIndex]->url;
+            if(url.rfind(L"https://calendar.google.com/",0)==0)
+                OpenUrl(url.c_str());
+        }
+        return;
+    }
+    if(action==653){
+        int year=0,month=0;VisibleCalendarMonth(year,month);
+        auto events=DayEvents(year,month,g_calendarSelectedDay);
+        if(!events.empty())
+            g_calendarSelectedIndex=(g_calendarSelectedIndex+1)%int(events.size());
+        return;
+    }
+    if(action==401){g_monthOffset=ClampInt(g_monthOffset-1,-24,24);g_calendarDetailsOpen=false;return;}
+    if(action==402){g_monthOffset=ClampInt(g_monthOffset+1,-24,24);g_calendarDetailsOpen=false;return;}
     switch(action){
         case 200: OpenProjectManager(hwnd,0);break;
         case 201: OpenProjectManager(hwnd,1);break;
@@ -2046,6 +2195,10 @@ void Animate(HWND hwnd){
     if(nowMs-g_lastTabsRead>950) {
         g_lastTabsRead=nowMs;
         ReadVoiceTabs();
+    }
+    if(nowMs-g_calendarLastRead>2500) {
+        g_calendarLastRead=nowMs;
+        ReadCalendarBridge();
     }
     if(nowMs-g_lastVoiceRead>275) {
         g_lastVoiceRead=nowMs;

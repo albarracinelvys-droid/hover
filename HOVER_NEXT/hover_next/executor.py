@@ -289,9 +289,12 @@ class Executor:
             for key in [0x5B,0x10,0x53]:user32.keybd_event(key,0,0,0)
             for key in [0x53,0x10,0x5B]:user32.keybd_event(key,0,2,0)
             return 'Herramienta de recorte activada.'
+        if action=='spotify_open':
+            from .desktop import spotify_start_playback
+            return spotify_start_playback(open_app=True,play=False)
         if action=='spotify_play':
             from .desktop import spotify_start_playback
-            return spotify_start_playback(open_app=True)
+            return spotify_start_playback(open_app=True,play=True)
         if action=='spotify_resume':
             from .desktop import spotify_start_playback
             return spotify_start_playback(open_app=False)
