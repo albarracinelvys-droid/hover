@@ -67,13 +67,13 @@ def parse(text: str) -> Intent:
         return Intent('screenshot')
     # Coucou-style AI routing: natural questions get a read-only agent,
     # edits are only performed inside a configured workspace after confirmation.
-    if re.match(r'^(?:usa|con|pide(?:le)? a)\\s+(?:codex|claude code)\\b', t):
-        task=re.sub(r'^(?:usa|con|pide(?:le)? a)\\s+(?:codex|claude code)\\s*', '',t).strip()
-        if re.match(r'^(?:crea|crear|modifica|modificar|edita|implementa|programa|desarrolla|corrige)\\b',task):
+    if re.match(r'^(?:usa|con|pide(?:le)? a)\s+(?:codex|claude code)\b', t):
+        task=re.sub(r'^(?:usa|con|pide(?:le)? a)\s+(?:codex|claude code)\s*', '',t).strip()
+        if re.match(r'^(?:crea|crear|modifica|modificar|edita|implementa|programa|desarrolla|corrige)\b',task):
             return Intent('agent_task',args={'prompt':task},requires_confirmation=True)
         return Intent('agent_ask',args={'prompt':task or t})
-    if re.match(r'^(?:crea|crear|programa|desarrolla|implementa|modifica|corrige|genera)\\b',t):
+    if re.match(r'^(?:crea|crear|programa|desarrolla|implementa|modifica|corrige|genera)\b',t):
         return Intent('agent_task',args={'prompt':t},requires_confirmation=True)
-    if re.match(r'^(?:explica|analiza|investiga|resume|resuelve|dime|cuanto|cuantos|que es|como|por que|puedes explicar|ayudame a entender)\\b',t):
+    if re.match(r'^(?:explica|analiza|investiga|resume|resuelve|dime|cuanto|cuantos|que es|como|por que|puedes explicar|ayudame a entender)\b',t):
         return Intent('agent_ask',args={'prompt':t})
     return Intent('unknown')
