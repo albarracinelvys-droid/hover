@@ -72,8 +72,11 @@ class IntentTests(unittest.TestCase):
         self.assertTrue(i.requires_confirmation)
     def test_new_chat_with_prompt(self):
         i=parse('Oye Hover, abre ChatGPT crea un nuevo chat y preguntale que es Python')
-        self.assertEqual(i.action,'new_chat_and_send')
-        self.assertTrue(i.requires_confirmation)
+        # Explicitly opening a chat and asking a question is one combined action.
+        self.assertEqual(i.action,'chat_compose')
+        self.assertEqual(i.provider,'chatgpt')
+        self.assertIn('Python',i.args['prompt'])
+        self.assertFalse(i.requires_confirmation)
     def test_prompt_confirmation(self):
         i=parse('pregúntale a Claude que explique la transformada de Fourier')
         self.assertEqual(i.action,'send_prompt')
