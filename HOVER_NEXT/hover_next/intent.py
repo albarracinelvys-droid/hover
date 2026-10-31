@@ -134,6 +134,13 @@ def parse(text: str) -> Intent:
     # Guard state-changing GitHub requests before generic web shortcuts.
     if re.fullmatch(r'(?:que puedes hacer|que sabes hacer|ayuda|comandos|mostrar comandos|lista de comandos)', t):
         return Intent('show_help')
+    # Google account searches/consent take precedence over public searches.
+    # A private Google result is NEVER silently sent to ChatGPT or Claude.
+    from .google_commands import parse_google_command
+    goog = parse_google_command(t)
+    if goog is not None:
+        action,args,confirm=goog
+        return Intent(action,args=args,requires_confirmation=confirm)
     # Natural information questions always go to Google before any app/file
     # routing: "como crear un repo" is research, NOT a repo creation command.
     # Explicit imperatives such as "crea un repositorio" do not match.
