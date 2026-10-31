@@ -36,6 +36,7 @@ class VoiceDialogue:
         self.dictation_until = 0.0
         self.pending_kind = ""
         self.pending_until = 0.0
+        self.pending_pc_location = ""
         self.recent_until = 0.0
         self.recent_action = ""
 
@@ -44,10 +45,11 @@ class VoiceDialogue:
         publish("listening", "Comando por F8")
         print("[F8] Di ahora tu orden, sin decir Hover.",flush=True)
 
-    def _ask_name(self, kind):
-        if kind not in ("txt","excel","folder","repo"):
+    def _ask_name(self, kind, location=""):
+        if kind not in ("txt","excel","folder","repo","word","csv"):
             return
         self.pending_kind = kind
+        self.pending_pc_location = location
         self.pending_until = self.clock()+45.0
         prompt = "Dime SOLO el nombre para "+("repositorio privado" if kind=="repo" else kind)
         print("[dialogo]",prompt,flush=True)
@@ -69,7 +71,16 @@ class VoiceDialogue:
             publish("listening","Repite solo el nombre",3)
             return "waiting"
         self.pending_kind=""
-        if kind=="repo":
+        place=self.pending_pc_location
+        self.pending_pc_location=""
+        if place:
+            labels={"desktop":"escritorio","downloads":"descargas",
+                    "documents":"documentos","favorite":"carpeta favorita"}
+            destination=labels.get(place,"escritorio")
+            noun={"folder":"carpeta","excel":"archivo excel",
+                  "word":"archivo word","txt":"txt","csv":"csv"}[kind]
+            command=f"crea un {noun} llamado {name} en el {destination}"
+        elif kind=="repo":
             command=f"crea un repositorio privado llamado {name}"
         elif kind=="folder":
             command=f"crea una subcarpeta llamada {name}"
@@ -202,6 +213,8 @@ class VoiceDialogue:
             print("[dictado] Di tu mensaje ahora; no necesitas Hover.",flush=True)
         elif command.action=="repo_name_needed":
             self._ask_name("repo")
+        elif command.action=="pc_name_needed":
+            self._ask_name(command.args["kind"],command.args["location"])
         elif command.action=="local_name_needed":
             self._ask_name(command.args.get("kind","txt"))
         return "action"
