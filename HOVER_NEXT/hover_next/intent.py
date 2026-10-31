@@ -81,5 +81,8 @@ def parse(text: str) -> Intent:
     # Optional expert tools are explicit; no automatic Codex for everyday commands.
     if re.match(r'^(?:usa|con)\s+codex\b',t):
         task=re.sub(r'^(?:usa|con)\s+codex\s*','',t).strip()
-        return Intent('agent_ask',args={'prompt':task}) if task else Intent('unknown')
+        if not task: return Intent('unknown')
+        if re.match(r'^(?:crea|crear|modifica|editar|edita|implementa|programa|desarrolla|corrige)\b',task):
+            return Intent('agent_task',args={'prompt':task},requires_confirmation=True)
+        return Intent('agent_ask',args={'prompt':task})
     return Intent('unknown')
