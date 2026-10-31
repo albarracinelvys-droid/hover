@@ -112,3 +112,38 @@ ejecutar operaciones peligrosas sin confirmación.
 
 Si ves «Reconocido» pero no «[listening]», copia la transcripción exacta
 para crear otra prueba de regresión.
+
+## Captura de voz y diagnóstico del micrófono (actualización)
+
+La captura usa bloques de audio de 30 ms, detección básica de voz por energía y silencio
+final de ~750 ms. El audio solo pasa a Whisper cuando se detecta una frase y **no se
+guarda ni se envía por red**. Whisper Small necesita procesamiento en CPU, por lo que
+esto no equivale a un asistente instantáneo. El reconocimiento de la palabra clave
+puede fallar en ambientes ruidosos; para acciones sensibles siempre se exige confirmación.
+
+En PowerShell:
+
+```powershell
+cd C:\Users\gomez\hover
+git pull origin main
+cd .\HOVER_NEXT
+.\PROBAR.bat
+.\DIAGNOSTICO_MICROFONO.bat
+```
+
+El diagnóstico muestra líneas como `[mic] RMS=0.00230 | umbral=0.00080`.
+Habla y compara: **si el RMS no sube cuando hablas**, revisa el dispositivo,
+permisos de micrófono y su volumen de entrada. Si aparece audio en el diagnóstico,
+prueba `INICIAR_VOZ.bat`, que debe mostrar `[asr] Voz detectada`.
+
+El equipo Realtek del registro del usuario mostraba el micrófono WASAPI como
+**dispositivo 9**. Para probarlo de forma directa:
+
+```powershell
+.\.venv\Scripts\python.exe -m hover_next.app --mic-test --mic 9
+.\.venv\Scripts\python.exe -m hover_next.app --voice --mic 9 --threshold 0.0006
+```
+
+Estos índices son locales y pueden variar. Si el audio está muy bajo, se puede
+probar `--threshold 0.0003`; un valor demasiado bajo provocará falsos positivos.
+Para mostrar la ayuda: `.\.venv\Scripts\python.exe -m hover_next.app --help`.
