@@ -74,6 +74,35 @@ class NoPromptConfirmationTests(unittest.TestCase):
             self.assertEqual(status, "action")
             browser.send_prompt.assert_called_once()
 
+    def test_direct_browser_prompt_reaches_verified_editor(self):
+        from hover_next.browser import BrowserBridge
+        with tempfile.TemporaryDirectory() as tmp:
+            bridge = BrowserBridge(Path(tmp) / "profile")
+            page = MagicMock()
+            page.url = "https://chatgpt.com/"
+            page.is_closed.return_value = False
+            editor = MagicMock()
+            editor.count.return_value = 1
+            editor.is_visible.return_value = True
+            page.locator.return_value.last = editor
+            with patch.object(bridge, "page", return_value=page):
+                result = bridge.send_prompt("chatgpt", "¿Cómo estás?", new=False)
+            editor.fill.assert_called_once_with("¿Cómo estás?", timeout=10000)
+            editor.press.assert_called_once_with("Enter", timeout=10000)
+            self.assertIn("Enter", result)
+
+    def test_browser_prompt_does_not_fake_success_on_login(self):
+        from hover_next.browser import BrowserBridge, BrowserUnavailable
+        with tempfile.TemporaryDirectory() as tmp:
+            bridge = BrowserBridge(Path(tmp) / "profile")
+            page = MagicMock()
+            page.url = "https://auth.openai.com/login"
+            page.is_closed.return_value = False
+            with patch.object(bridge, "page", return_value=page):
+                with self.assertRaises(BrowserUnavailable):
+                    bridge.send_prompt("chatgpt", "¿Cómo estás?", new=False)
+            page.locator.assert_not_called()
+
     def test_high_impact_operations_still_need_approval(self):
         for phrase in (
             "Hover crea un repositorio privado en GitHub llamado prueba-materiales",
