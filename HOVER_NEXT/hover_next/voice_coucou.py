@@ -144,11 +144,11 @@ def run(executor, *, engine="auto", model="small",
             print("[error]",type(exc).__name__,str(exc),flush=True)
             return "failed"
 
-    dialogue = VoiceDialogue(lambda command:run_one(command,executor),send_dictated)
+    dialogue = VoiceDialogue(lambda command:run_one(command,executor,voice_mode=True),send_dictated)
 
     def recognizer_worker():
         try:
-            while not stop.is_set() or not work_queue.empty():
+            while not stop.is_set():
                 try:
                     samples = work_queue.get(timeout=0.2)
                 except Empty:
@@ -176,6 +176,14 @@ def run(executor, *, engine="auto", model="small",
         except Exception as exc:
             error.append(exc)
             stop.set()
+        finally:
+            # A Playwright synchronous browser must be closed by the same thread
+            # that started it. Never attempt this from the microphone thread.
+            try:
+                executor.browser.close()
+                print("[chat] Chrome de HOVER cerrado desde su hilo.",flush=True)
+            except Exception as exc:
+                print("[chat] Error controlado al cerrar Chrome:",exc,flush=True)
 
     def callback(indata, frame_count, ti, status):
         if status:
