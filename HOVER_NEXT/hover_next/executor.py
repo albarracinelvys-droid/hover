@@ -56,6 +56,9 @@ class Executor:
             return 'Accion pendiente de confirmacion. No se ejecuto.'
         action=intent.action
         provider=intent.provider
+        if action == "close_google_tab":
+            from .desktop import close_google_tab
+            return close_google_tab()
         if action == "windows_app":
             from .desktop import open_windows_app
             return open_windows_app(intent.args["app"])
