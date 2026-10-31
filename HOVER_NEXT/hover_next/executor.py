@@ -71,6 +71,30 @@ def confirm_voice_intent(intent: Intent) -> bool:
             "Comprueba que esté escrito EXACTAMENTE como quieres.\\n"
             "¿Autorizar su creación?"
         )
+    elif action in ("pc_transfer","pc_rename","pc_create","pc_append"):
+        names={"downloads":"Descargas","desktop":"Escritorio",
+               "documents":"Documentos","favorite":"Carpeta favorita"}
+        args=intent.args
+        folder=names.get(args.get("location",""),"")
+        if action=="pc_transfer":
+            verb="MOVER" if args.get("operation")=="move" else "COPIAR"
+            source=args.get("name","Archivo no identificado")
+            origin=names.get(args.get("from"),"Origen")
+            target=names.get(args.get("to"),"Destino")
+            question=(f"¿{verb} este archivo?\\n\\n{source}\\n\\n"
+                      f"Desde: {origin}\\nHacia: {target}\\n\\n"
+                      "Se conservarán los archivos existentes. ¿Confirmas?")
+        elif action=="pc_rename":
+            question=(f"RENOMBRAR EN {folder}\\n\\n"
+                      f"Actual: {args.get('old','')}\\n"
+                      f"Nuevo: {args.get('new','')}\\n\\n¿Confirmas?")
+        elif action=="pc_create":
+            question=(f"CREAR EN {folder}\\n\\n"
+                      f"{args.get('kind','')}: {args.get('name','')}\\n\\n¿Confirmas?")
+        else:
+            question=(f"AGREGAR TEXTO (sin borrar lo existente)\\n\\n"
+                      f"Archivo: {args.get('name','')}\\nUbicación: {folder}\\n\\n"
+                      f"Texto: {args.get('text','')[:200]}\\n\\n¿Confirmas?")
     else:
         question = (
             f"Acción: {action}\\nDatos: {intent.args}\\n\\n"
@@ -108,9 +132,13 @@ class Executor:
         action=intent.action
         provider=intent.provider
         if action == 'show_help':
-            return ('Comandos: calculadora, Word, Excel, GitHub, WhatsApp, Google, '
-                    'Drive, Gmail, Descargas, Administrador de tareas, volumen, '
-                    'musica y repositorios privados (requieren confirmacion).')
+            return ('Comandos: calculadora, Word, Excel, Google, Drive, '
+                    'crear carpetas y TXT, copiar o mover archivos, '
+                    'renombrar, agregar texto, volumen, musica, '
+                    'repositorios privados y más. Cambios requieren confirmacion.')
+        if action in ('pc_transfer','pc_rename','pc_create','pc_append'):
+            from .pc_files import perform
+            return perform(action,intent.args,self.config)
         if action == 'media_key':
             from .desktop import send_media_key
             return send_media_key(intent.args['key'])

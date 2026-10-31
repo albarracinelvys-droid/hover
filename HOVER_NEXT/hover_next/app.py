@@ -43,6 +43,18 @@ def run_one(command, executor, *, voice_mode=False):
         publish("error", "No pude interpretar esa instruccion")
         print("HOVER: No pude interpretar esa instruccion.", flush=True)
         return None
+    if intent.action == "pc_transfer" and intent.args.get("pick") == "latest":
+        # Resolve the actual file BEFORE asking permission; the confirmation
+        # must display the chosen basename, not silently use a newer download.
+        try:
+            from .pc_files import prepare_transfer
+            args=prepare_transfer(intent.args,executor.config)
+            intent=Intent(intent.action,intent.provider,args,intent.requires_confirmation)
+        except Exception as exc:
+            error=f"{type(exc).__name__}: {exc}"
+            publish("error",error)
+            print("HOVER - error controlado:",error,flush=True)
+            return None
     auto_repo = voice_mode and voice_may_autocreate_private_repo(command,intent)
     if intent.requires_confirmation and not auto_repo:
         publish("thinking", "Confirmar antes de ejecutar: " + intent.action, status_page(intent.action))
