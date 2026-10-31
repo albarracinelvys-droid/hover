@@ -63,6 +63,9 @@ class Executor:
             return 'Accion pendiente de confirmacion. No se ejecuto.'
         action=intent.action
         provider=intent.provider
+        if action == 'media_key':
+            from .desktop import send_media_key
+            return send_media_key(intent.args['key'])
         if action == 'repo_name_needed':
             return ('Entendí que quieres crear un repositorio privado, pero no su nombre. '
                     'Di: Hover, crea un repositorio privado en GitHub llamado Ejemplo.')
