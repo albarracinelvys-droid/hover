@@ -56,6 +56,8 @@ def parse(text: str) -> Intent:
     spoken_command = extract_wake(text)
     t = spoken_command if spoken_command is not None else normalize(text)
     # Guard state-changing GitHub requests before generic web shortcuts.
+    if re.fullmatch(r'(?:que puedes hacer|que sabes hacer|ayuda|comandos|mostrar comandos|lista de comandos)', t):
+        return Intent('show_help')
     repo_request = _parse_private_repo_request(t)
     if repo_request is not None:
         return repo_request
