@@ -6,6 +6,7 @@ import numpy as np
 
 from hover_next.audio_coucou import AdaptiveVad, FRAME, normalize_audio, resample_frame
 from hover_next.voice_coucou import VoiceDialogue
+from hover_next.voice_check import recognition_score
 
 
 class VadTests(unittest.TestCase):
@@ -55,6 +56,14 @@ class VadTests(unittest.TestCase):
         self.assertEqual(out.shape,(480,))
         self.assertAlmostEqual(float(out.mean()),0.11,places=5)
 
+
+class MicrophoneSelectionTests(unittest.TestCase):
+    def test_correct_windows_order_scores_highest(self):
+        self.assertEqual(recognition_score("Hover abre calculadora"),1.0)
+        self.assertEqual(recognition_score("abre la calculadora"),1.0)
+    def test_noise_does_not_win_device_selection(self):
+        self.assertLess(recognition_score("Subtitulos realizados por la comunidad de Amara.org"),0.5)
+        self.assertLess(recognition_score("Hasta la proxima"),0.5)
 
 class DialogueTests(unittest.TestCase):
     def setUp(self):
