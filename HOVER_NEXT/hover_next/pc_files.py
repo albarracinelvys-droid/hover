@@ -274,6 +274,9 @@ def close_foreground_window(app: str) -> str:
         "notepad":("Notepad","bloc de notas"),
         "paint":("MSPaintApp","paint"),
         "explorer":("CabinetWClass","explorador de archivos"),
+        "vscode":("Chrome_WidgetWin_1","visual studio code"),
+        "terminal":("ConsoleWindowClass","terminal"),
+        "task_manager":("TaskManagerWindow","administrador de tareas"),
     }
     if app!="foreground":
         if app not in expected:

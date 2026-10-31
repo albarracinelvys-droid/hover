@@ -131,6 +131,13 @@ def _parse_local_creation(t: str) -> Intent | None:
 def parse(text: str) -> Intent:
     spoken_command = extract_wake(text)
     t = spoken_command if spoken_command is not None else normalize(text)
+    # Deliberate shutdown phrase: only a full utterance after the wake word
+    # or F8 may request poweroff. Never fuzzy-match shutdown or infer it
+    # from a general farewell inside a longer sentence.
+    if re.fullmatch(r"(?:bye bye|by by|bai bai|bay bay)", t):
+        return Intent("pc_shutdown")
+    if re.fullmatch(r"(?:apaga|apagar|apaga ya)\s+(?:el|mi|la)?\s*(?:pc|computador|ordenador|equipo)",t):
+        return Intent("pc_shutdown")
     # Guard state-changing GitHub requests before generic web shortcuts.
     if re.fullmatch(r'(?:que puedes hacer|que sabes hacer|ayuda|comandos|mostrar comandos|lista de comandos)', t):
         return Intent('show_help')
@@ -150,6 +157,13 @@ def parse(text: str) -> Intent:
     if pc is not None:
         action, args = pc
         return Intent(action,args=args,requires_confirmation=False)
+    # Flexible meaning-based matching is restricted to known local Windows
+    # applications. It does not generate commands or infer deletion/shutdown.
+    from .voice_semantics import parse_flexible
+    flexible=parse_flexible(t)
+    if flexible is not None:
+        action,args=flexible
+        return Intent(action,args=args)
     # Natural information questions always go to Google before any app/file
     # routing: "como crear un repo" is research, NOT a repo creation command.
     # Explicit imperatives such as "crea un repositorio" do not match.

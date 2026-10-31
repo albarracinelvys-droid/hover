@@ -139,6 +139,9 @@ class Executor:
         if action in ('pc_transfer','pc_rename','pc_create','pc_append','pc_delete','pc_close_window'):
             from .pc_files import perform
             return perform(action,intent.args,self.config)
+        if action == 'pc_shutdown':
+            from .desktop import shutdown_windows
+            return shutdown_windows()
         if action == 'media_key':
             from .desktop import send_media_key
             return send_media_key(intent.args['key'])
