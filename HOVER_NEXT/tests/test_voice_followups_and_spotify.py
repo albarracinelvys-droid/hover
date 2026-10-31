@@ -142,21 +142,21 @@ class VoiceFollowupTests(unittest.TestCase):
 
 
 class SpotifyExecutionTests(unittest.TestCase):
-    def test_start_launches_and_sends_play_key(self):
+    def test_start_does_not_toggle_another_player_when_spotify_is_not_ready(self):
         with patch("hover_next.desktop.sys.platform","win32"), \
              patch("hover_next.desktop.os.startfile",create=True) as start, \
-             patch("hover_next.desktop._spotify_session_play",return_value=False), \
-             patch("hover_next.desktop.send_media_key",return_value="sent") as key, \
+             patch("hover_next.desktop._spotify_session_play",return_value="no_session"), \
+             patch("hover_next.desktop.send_media_key") as key, \
              patch("time.sleep"):
             msg=spotify_start_playback(open_app=True)
         start.assert_called_once_with("spotify:")
-        key.assert_called_once_with("play_pause")
-        self.assertIn("no confirmó",msg)
+        key.assert_not_called()
+        self.assertIn("no detectó una sesión",msg)
 
     def test_followup_does_not_open_spotify_twice(self):
         with patch("hover_next.desktop.sys.platform","win32"), \
              patch("hover_next.desktop.os.startfile",create=True) as start, \
-             patch("hover_next.desktop._spotify_session_play",return_value=True), \
+             patch("hover_next.desktop._spotify_session_play",return_value="playing"), \
              patch("hover_next.desktop.send_media_key") as key:
             msg=spotify_start_playback(open_app=False)
         start.assert_not_called()
@@ -171,5 +171,5 @@ class SpotifyExecutionTests(unittest.TestCase):
                        return_value="Reproducción solicitada") as player:
                 e.execute(parse("Hover reproduce Spotify"))
                 e.execute(parse("Hover reprodúcelo"))
-            self.assertEqual(player.call_args_list[0].kwargs,{"open_app":True})
+            self.assertEqual(player.call_args_list[0].kwargs,{"open_app":True,"play":True})
             self.assertEqual(player.call_args_list[1].kwargs,{"open_app":False})
