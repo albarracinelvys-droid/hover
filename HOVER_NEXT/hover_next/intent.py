@@ -226,7 +226,7 @@ def parse(text: str) -> Intent:
         r'reanuda la musica|continua la musica|continua spotify)',t):
         return Intent('spotify_resume','spotify')
     if t in ('spotify','espotifai','spotifai'):
-        return Intent('spotify_play','spotify')
+        return Intent('spotify_open','spotify')
     if t in ('calculadora','la calculadora','calc'):
         return Intent('windows_app',args={'app':'calculator'})
     if t in ('github','git hub'):
@@ -262,8 +262,11 @@ def parse(text: str) -> Intent:
         return Intent('new_chat',provider)
     if re.search(r'(?:abre|abrir|accede|entra|ingresa|visita|muestra)\b',t) and provider in ('chatgpt','claude'):
         return Intent('open_site',provider)
-    if provider=='spotify' and any(x in t for x in ('reproduce','reproces','pon','abre','inicia','reproducir')):
-        return Intent('spotify_play',provider)
+    if provider=='spotify':
+        if any(x in t for x in ('reproduce','reproces','pon','reanuda','play','reproducir')):
+            return Intent('spotify_play',provider)
+        if any(x in t for x in ('abre','abrir','inicia','muestra','abreme')):
+            return Intent('spotify_open',provider)
     if re.search(r'\b(muestrame|muestra|abre)\b.*\b(mi pc|este equipo|explorador|mi computador)\b',t):
         return Intent('show_pc')
     if re.search(r'\b(captura de pantalla|captura la pantalla|screenshot|recorte)\b',t):
