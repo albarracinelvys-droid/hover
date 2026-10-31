@@ -156,6 +156,10 @@ def parse(text: str) -> Intent:
         return Intent('open_site','chatgpt')
     if t in ('claude','cloud','clout','clouding','clod','cloude','clau'):
         return Intent('open_site','claude')
+    if re.fullmatch(
+        r'(?:reproducelo|ponlo|dale play|reanuda spotify|'
+        r'reanuda la musica|continua la musica|continua spotify)',t):
+        return Intent('spotify_resume','spotify')
     if t in ('spotify','espotifai','spotifai'):
         return Intent('spotify_play','spotify')
     if t in ('calculadora','la calculadora','calc'):
