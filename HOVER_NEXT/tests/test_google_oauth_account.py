@@ -241,7 +241,8 @@ class GoogleIpcTests(unittest.TestCase):
                 self.assertIsNone(ipc.poll_control())
 
     def test_reject_google_account_mismatch(self):
-        with patch("hover_next.google_auth.status",side_effect=[
+        with patch("hover_next.google_auth._client_path",return_value=Path("oauth.json")), \
+             with patch("hover_next.google_auth.status",side_effect=[
              {"drive":True,"calendar":False,"gmail":False,"docs":False},
              {"drive":True,"calendar":False,"gmail":False,"docs":False}]), \
              patch("hover_next.google_auth.account_email",
@@ -256,7 +257,8 @@ class GoogleIpcTests(unittest.TestCase):
         self.assertIn("calendar:",result)
 
     def test_drop_new_token_when_identity_lookup_fails(self):
-        with patch("hover_next.google_auth.status",return_value={
+        with patch("hover_next.google_auth._client_path",return_value=Path("oauth.json")), \
+             with patch("hover_next.google_auth.status",return_value={
              "drive":False,"calendar":False,"gmail":False,"docs":False}), \
              patch("hover_next.google_auth.connect") as connect, \
              patch("hover_next.google_auth.account_email",
@@ -268,6 +270,18 @@ class GoogleIpcTests(unittest.TestCase):
         connect.assert_called_once_with("gmail")
         disconnect.assert_called_once_with("gmail")
         self.assertIn("gmail:",result)
+
+    def test_missing_oauth_client_reports_once_and_skips_all_services(self):
+        with patch("hover_next.google_auth._client_path",
+                   side_effect=auth.GoogleAuthError("missing")), \
+             patch("hover_next.google_auth.connect") as connect, \
+             patch("hover_next.google_ipc.write_status") as report, \
+             patch("hover_next.ui_bridge.publish") as ui:
+            message=ipc.execute_control("connect","all")
+        self.assertIn("FALTA CLIENTE OAUTH",message)
+        connect.assert_not_called()
+        report.assert_called_once()
+        ui.assert_called_once()
 
     def test_status_has_only_flags_and_message_not_tokens(self):
         with patch("hover_next.google_auth.status",return_value={
