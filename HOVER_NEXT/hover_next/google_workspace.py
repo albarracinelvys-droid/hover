@@ -57,7 +57,7 @@ def drive_search(query, limit=5,docs_only=False):
     for part in terms:
         response=api.files().list(
             q=_drive_query(part,docs_only),fields="nextPageToken, files(id,name,mimeType,webViewLink,description,modifiedTime)",
-            page_size=min(30,limit*3),spaces="drive").execute()
+            pageSize=min(30,limit*3),spaces="drive").execute()
         for file in response.get("files",[]):
             fid=file.get("id","")
             if fid in seen:continue
