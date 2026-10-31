@@ -26,6 +26,7 @@ def _microphone(device, threshold, diagnostic, on_utterance=None, seconds=None):
     onset=0
     frames=[]
     active=False
+    voiced_frames=0
     started=time.monotonic()
     last_print=0.0
     print(f"[mic] {info['name']} | dispositivo={device if device is not None else 'predeterminado'} | {rate} Hz",flush=True)
@@ -46,16 +47,22 @@ def _microphone(device, threshold, diagnostic, on_utterance=None, seconds=None):
             if not active:
                 pre.append(samples)
                 onset=(onset+1) if speech else 0
-                if onset >= 4:
+                if onset >= 6:
                     active=True;quiet=0
+                    voiced_frames=onset
                     frames=list(pre);pre.clear()
                 continue
             frames.append(samples)
             quiet=0 if speech else quiet+1
+            if speech:
+                voiced_frames+=1
             if quiet>=23 or len(frames)>=400:
                 audio=np.concatenate(frames)
-                active=False;frames=[];pre.clear();quiet=0;onset=0
-                if len(audio) < int(rate*0.18):
+                enough_speech=voiced_frames>=12
+                active=False;frames=[];pre.clear();quiet=0;onset=0;voiced_frames=0
+                # Ignore impulsive sound and microphone artifacts: 12 active
+                # 30ms blocks (~360ms) of actual audio are required.
+                if not enough_speech or len(audio) < int(rate*0.40):
                     continue
                 # Whisper requires 16 kHz; resample from the driver's native rate.
                 if rate!=16000:
@@ -101,8 +108,13 @@ def run_voice(executor,model_name="small",device=None,threshold=0.0008):
     def heard(audio):
         nonlocal awaiting,deadline,chat_provider,chat_deadline
         segments,_=model.transcribe(audio,language="es",beam_size=5,
-                                    vad_filter=True,condition_on_previous_text=False)
-        spoken=" ".join(s.text.strip() for s in segments).strip()
+                                    vad_filter=True,condition_on_previous_text=False,
+                                    no_speech_threshold=0.65)
+        # A short noisy segment may cause Whisper to invent generic phrases.
+        # Skip low-confidence transcriptions rather than adding them as aliases.
+        confident=[seg.text.strip() for seg in segments
+                   if seg.avg_logprob > -1.0 and seg.no_speech_prob < 0.70]
+        spoken=" ".join(confident).strip()
         if not spoken:
             print("[asr] No se reconocieron palabras",flush=True)
             return
