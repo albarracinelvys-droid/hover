@@ -77,10 +77,10 @@ class IntentTests(unittest.TestCase):
         self.assertEqual(i.provider,'chatgpt')
         self.assertIn('Python',i.args['prompt'])
         self.assertFalse(i.requires_confirmation)
-    def test_prompt_confirmation(self):
+    def test_prompt_needs_no_confirmation(self):
         i=parse('pregúntale a Claude que explique la transformada de Fourier')
         self.assertEqual(i.action,'send_prompt')
-        self.assertTrue(i.requires_confirmation)
+        self.assertFalse(i.requires_confirmation)
     def test_spoken_bad_transcription(self):
         self.assertEqual(parse('oye over abre chat e pepe').provider,'chatgpt')
     def test_no_token_interpolation(self):
