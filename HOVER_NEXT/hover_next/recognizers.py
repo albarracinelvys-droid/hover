@@ -114,8 +114,15 @@ class WhisperRecognizer:
         segments, _ = self.model.transcribe(
             audio, language="es", beam_size=5, temperature=0,
             condition_on_previous_text=False, vad_filter=False,
-            initial_prompt="Hover. Oye Hover. ChatGPT. Claude. Spotify. "
-                           "Abre calculadora, Word, Google Drive, Gmail.",
+            initial_prompt=(
+                "El usuario habla español con HOVER, su asistente de Windows. "
+                "Oye Hover, abre el explorador de archivos. "
+                "Oye Hover, cierra el explorador de archivos. "
+                "Oye Hover, abre Paint. Abre Visual Studio Code. "
+                "Abre el bloc de notas. Crea un Excel en Documentos. "
+                "Cierra la ventana actual. Hover, bye bye. "
+                "ChatGPT, Claude, Spotify, Google Drive, Gmail."
+            ),
             no_speech_threshold=0.5,
             hallucination_silence_threshold=1.0,
         )
