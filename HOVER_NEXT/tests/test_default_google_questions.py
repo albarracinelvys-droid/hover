@@ -50,9 +50,9 @@ class NaturalQuestionRoutingTests(unittest.TestCase):
 
     def test_translations_are_google_translate(self):
         cases = [
-            ("Hover traduce buenos días al inglés", "buenos dias", "en"),
+            ("Hover traduce buenos días al inglés", "buenos días", "en"),
             ("Oye Hover traduce hello al español", "hello", "es"),
-            ("Hover traduce motor eléctrico al francés", "motor electrico", "fr"),
+            ("Hover traduce motor eléctrico al francés", "motor eléctrico", "fr"),
             ("Hover cómo se dice mantenimiento en inglés", "mantenimiento", "en"),
             ("Hover traduce", "", "en"),
         ]
@@ -106,7 +106,7 @@ class GoogleExecutionTests(unittest.TestCase):
             with patch("hover_next.desktop.webbrowser.open_new_tab",return_value=True) as opener:
                 result=executor.execute(parse("Hover qué es un PLC"))
         opener.assert_called_once_with(
-            "https://www.google.com/search?q=que+es+un+plc")
+            "https://www.google.com/search?q=qu%C3%A9+es+un+plc")
         self.assertIn("Buscando en Google", result)
 
     def test_google_translate_url(self):
@@ -117,8 +117,18 @@ class GoogleExecutionTests(unittest.TestCase):
         url=opener.call_args.args[0]
         self.assertTrue(url.startswith("https://translate.google.com/?"))
         self.assertIn("tl=en",url)
-        self.assertIn("text=buenos+dias",url)
+        self.assertIn("text=buenos+d%C3%ADas",url)
         self.assertIn("Traductor",result)
+
+    def test_voice_preserves_programming_symbols_and_accents(self):
+        d=VoiceDialogue(lambda phrase:parse(phrase),lambda provider,msg:None)
+        executed=[]
+        d.execute=lambda phrase:executed.append(parse(phrase)) or "ok"
+        with patch("hover_next.voice_coucou.publish"):
+            self.assertEqual(
+                d.process("Oye Hover, busca C++ & Python en Google"),"action")
+        self.assertEqual(executed[-1].action,"google_search")
+        self.assertEqual(executed[-1].args["query"],"c++ & python")
 
     def test_google_queries_are_hands_free(self):
         with tempfile.TemporaryDirectory() as td:
