@@ -73,6 +73,24 @@ class RecordedVoiceCommands(unittest.TestCase):
         self.assertEqual(parse('Hover abre una nueva pestaña de Google').args['service'],
                          'google_home')
 
+    def test_media_and_volume_commands(self):
+        cases={
+            'Hover pausa la música':'play_pause',
+            'Hover siguiente canción':'next',
+            'Hover canción anterior':'previous',
+            'Hover sube el volumen':'volume_up',
+            'Hover baja el volumen':'volume_down',
+            'Hover silencia':'volume_mute',
+        }
+        for utterance,key in cases.items():
+            with self.subTest(utterance=utterance):
+                i=parse(utterance)
+                self.assertEqual(i.action,'media_key')
+                self.assertEqual(i.args['key'],key)
+
+    def test_help_command(self):
+        self.assertEqual(parse('Hover que puedes hacer').action,'show_help')
+
     def test_unrecognized_creative_instruction_never_runs_software(self):
         self.assertEqual(parse('Hover crea uno rapo en guitarra').action,'unknown')
 
