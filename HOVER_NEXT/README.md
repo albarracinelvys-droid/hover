@@ -147,3 +147,95 @@ El equipo Realtek del registro del usuario mostraba el micrófono WASAPI como
 Estos índices son locales y pueden variar. Si el audio está muy bajo, se puede
 probar `--threshold 0.0003`; un valor demasiado bajo provocará falsos positivos.
 Para mostrar la ayuda: `.\.venv\Scripts\python.exe -m hover_next.app --help`.
+
+
+## HOVER silencioso, inspirado en Coucou
+
+Referencia de arquitectura: [Louis-CFM/coucou](https://github.com/Louis-CFM/coucou)
+(MIT para el codigo; nombre/personaje y recursos visuales tienen otras
+condiciones). **Se adapta el principio, no se copia su mascota ni su interfaz.**
+Coucou monitoriza agentes y permite permisos en la isla. En HOVER NEXT
+la primera implementacion usa el mismo concepto de estados visuales para
+las tareas que inicia HOVER; **aun no monitoriza sesiones externas** ni puede
+aprobar permisos de Claude Code/Codex desde el mod.
+
+La voz **no habla**, ni reproduce pitidos: transcribe localmente, interpreta
+el comando y escribe estados en
+`%TEMP%\WindhawkIslandPremium\voice_ui.txt`, que el mod C++ existente
+`HOVER_v4_1_VOZ_CONTROLES_WINDHAWK.wh.cpp` sabe leer (listening,
+thinking, ok, error). Debes mantener **el mod y el proceso Python
+ejecutandose a la vez** para ver las respuestas en la isla.
+
+### Prueba recomendada para Realtek (dispositivo 9)
+
+Abre PowerShell:
+```powershell
+cd C:\Users\gomez\hover
+git pull origin main
+cd .\HOVER_NEXT
+.\PROBAR.bat
+.\DIAGNOSTICO_MIC_REALTEK.bat
+.\INICIAR_SILENCIOSO_REALTEK.bat
+```
+
+El lanzador Realtek 9 es especifico para el listado de microfonos que
+mostraste; si la lista cambia, usa `--mic-test` para ver el nivel y
+`--mic N` para cambiar al nuevo numero. Se imprime un valor RMS cada
+dos segundos y `[asr] Voz detectada` cuando empieza a transcribir.
+Si el ruido se dispara constantemente, sube `--threshold`. El motor
+necesita una voz clara y los resultados dependen del equipo.
+
+### Acciones directas y peticiones abiertas
+
+Sin instalar ningun agente adicional: «Oye Hover, abre ChatGPT»,
+«Oye Hover, abre Claude», «Oye Hover, abre mi PC»,
+«Oye Hover, captura de pantalla». La ruta de GitHub necesita
+GitHub CLI autenticado. Los uploads a ChatGPT/Claude siguen siendo
+experimentales y requieren confirmacion.
+
+Para peticiones abiertas, la ruta opcional usa un agente **ya
+instalado y con sesion iniciada**. Si usas Codex (predefinido):
+```powershell
+codex --version
+codex login
+```
+
+Opcionalmente usa Claude Code CLI:
+```powershell
+claude --version
+```
+
+En `%LOCALAPPDATA%\HOVER_NEXT\config.json` agrega
+```json
+{
+  "agent_provider": "codex",
+  "agent_workspace": "C:\\Users\\gomez\\Documents\\HOVER_TAREAS"
+}
+```
+Crea primero esa carpeta de trabajo en tu computador. HOVER nunca
+crea esa ruta automaticamente ni usa acceso total al sistema.
+
+**Prueba** «Oye Hover, explica para que sirve un PLC»:
+`agent_ask` consulta al proveedor con solo lectura y presenta la
+respuesta como texto en consola y un resumen breve en la isla.
+
+**Prueba** «Oye Hover, desarrolla un programa de ejemplo»:
+`agent_task` solicita **SI escrito** y, solo entonces, permite a
+Codex editar en `agent_workspace` mediante
+`codex exec --sandbox workspace-write`. No implementamos
+`danger-full-access` ni `bypassPermissions`. Si no hay una CLI
+instalada, HOVER informa del requisito sin inventar que la tarea
+se ha completado.
+
+**Privacidad**: Whisper procesa el audio localmente. Si activas
+Codex o Claude, las instrucciones y el contexto de trabajo que el
+agente lea pueden enviarse al proveedor correspondiente. No subas
+tokens ni perfiles de navegador al GitHub publico.
+
+### Limitaciones pendientes frente a Coucou
+- La aprobacion de herramientas en la isla para las sesiones externas de
+  Claude Code/Codex requiere hooks e IPC bidireccional, aun pendientes.
+- El envio de archivos, proyectos, respuestas completas y tareas con
+  multiples aplicaciones sigue siendo una integracion experimental.
+- El listener Python requiere mantenerse abierto; no existe aun un
+  servicio/autoinicio empaquetado como aplicacion independiente.
