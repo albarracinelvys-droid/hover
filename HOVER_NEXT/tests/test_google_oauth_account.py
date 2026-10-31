@@ -242,7 +242,7 @@ class GoogleIpcTests(unittest.TestCase):
 
     def test_reject_google_account_mismatch(self):
         with patch("hover_next.google_auth._client_path",return_value=Path("oauth.json")), \
-             with patch("hover_next.google_auth.status",side_effect=[
+             patch("hover_next.google_auth.status",side_effect=[
              {"drive":True,"calendar":False,"gmail":False,"docs":False},
              {"drive":True,"calendar":False,"gmail":False,"docs":False}]), \
              patch("hover_next.google_auth.account_email",
@@ -258,7 +258,7 @@ class GoogleIpcTests(unittest.TestCase):
 
     def test_drop_new_token_when_identity_lookup_fails(self):
         with patch("hover_next.google_auth._client_path",return_value=Path("oauth.json")), \
-             with patch("hover_next.google_auth.status",return_value={
+             patch("hover_next.google_auth.status",return_value={
              "drive":False,"calendar":False,"gmail":False,"docs":False}), \
              patch("hover_next.google_auth.connect") as connect, \
              patch("hover_next.google_auth.account_email",
