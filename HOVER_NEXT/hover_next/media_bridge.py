@@ -284,7 +284,36 @@ def start_background(stop_event) -> None:
     threading.Thread(target=worker,daemon=True,name="hover-media-bridge").start()
 
 
+async def check() -> int:
+    """One-shot Windows diagnostic: never starts playback or writes tokens."""
+    if MediaManager is None:
+        print("[media] PyWinRT no instalado: usa pip install -r requirements.txt")
+        return 2
+    try:
+        manager=await MediaManager.request_async()
+        session,spotify=choose_session(manager)
+        if session is None:
+            print("[media] Sin sesión: abre Spotify y selecciona una canción.")
+            return 1
+        info=await session.try_get_media_properties_async()
+        cover=await cover_from_media(info)
+        playing=session.get_playback_info().playback_status==PlaybackStatus.PLAYING
+        print("[media] Aplicación:",friendly_source(session.source_app_user_model_id))
+        print("[media] Canción:",clean(info.title) or "(sin título)")
+        print("[media] Artista:",clean(info.artist) or "(sin artista)")
+        print("[media] Reproduciendo:", "SI" if playing else "NO")
+        print("[media] Carátula:",cover if cover else
+              "No publicada por la sesión multimedia de Windows")
+        return 0
+    except Exception as exc:
+        print("[media] Diagnóstico no disponible:",type(exc).__name__)
+        return 2
+
+
 if __name__ == "__main__":
+    import sys
+    if "--check" in sys.argv:
+        sys.exit(asyncio.run(check()))
     try:
         asyncio.run(run())
     except KeyboardInterrupt:
