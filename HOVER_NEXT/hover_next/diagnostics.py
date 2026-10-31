@@ -7,6 +7,9 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+from urllib.request import urlopen
+import json
+import os
 import re
 import statistics
 
@@ -61,6 +64,36 @@ def summarize(content):
     return summary
 
 
+def ollama_status():
+    """GET /api/tags only; never asks the LLM to classify or execute."""
+    from .local_nlu import DEFAULT_MODEL
+    if os.environ.get("HOVER_NLU","auto").lower()=="off":
+        return "DESACTIVADO por HOVER_NLU=off"
+    model=os.environ.get("HOVER_NLU_MODEL",DEFAULT_MODEL)
+    try:
+        with urlopen("http://127.0.0.1:11434/api/tags",timeout=1.5) as response:
+            body=json.loads(response.read(100_000))
+        models=body.get("models",[])
+        if not isinstance(models,list):
+            return "Respuesta inesperada de Ollama"
+        available={str(x.get("name","")) for x in models if isinstance(x,dict)}
+        if model in available or model+":latest" in available:
+            return f"ACTIVO · modelo {model} instalado"
+        return f"ACTIVO · falta descargar {model} (ollama pull {model})"
+    except (OSError,ValueError,TypeError):
+        return "NO RESPONDE · inicia Ollama en Windows"
+
+
+def latest_unknowns(content,limit=3):
+    """Only unknown voice commands; don't publish a full private log."""
+    values=[]
+    prefix="[accion] Sin coincidencia:"
+    for line in content.splitlines():
+        if line.startswith(prefix):
+            values.append(line[len(prefix):].strip()[:150])
+    return values[-limit:]
+
+
 def quick_check():
     from .intent import parse
     pid=_running_hover_process()
@@ -68,6 +101,7 @@ def quick_check():
     print("Motor de voz:",f"ACTIVO (PID {pid})" if pid else "NO DETECTADO")
     _,path=state_paths()
     print("Registro:",path)
+    print("Modelo local Ollama:",ollama_status())
     content=recent_log()
     if not content:
         print("No hay registros recientes. Inicia HOVER y prueba una orden.")
@@ -93,8 +127,18 @@ def quick_check():
             print("Sugerencia: verifica el micrófono y la transcripción; "
                   "puedes probar con F8.")
         if stats["unknown"]:
-            print("Sugerencia: el texto llega, pero el intérprete no encuentra "
-                  "la acción. Comprueba que Ollama esté disponible.")
+            print("Sugerencia: el texto llegó, pero no se identificó una acción.")
+            print("Últimas órdenes no reconocidas (revisa datos privados antes de compartir):")
+            for utterance in latest_unknowns(content):
+                print("  -",utterance)
+            reasons=[line.strip() for line in content.splitlines()
+                     if line.startswith("[nlu]")]
+            if reasons:
+                print("Últimas decisiones del intérprete local:")
+                for message in reasons[-5:]:
+                    print("  ",message)
+            else:
+                print("  No hay detalles NLU en este registro; usa la versión actualizada.")
         if stats["execution_errors"]:
             print("Sugerencia: algunas órdenes se entendieron pero fallaron "
                   "al ejecutarse. Consulta voice.log para ver el motivo.")
