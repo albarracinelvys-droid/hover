@@ -65,6 +65,13 @@ def parse_pc_command(text: str):
         t)
     if unnamed:
         kind,where=unnamed.groups()
+        # Preserve HOVER's existing favorite-folder workflows when a user
+        # says "crea una subcarpeta" or "crea un TXT" without a location.
+        # Those routes ask for a name and use the configured favorite.
+        if ((kind in ("subcarpeta","txt","archivo de texto") and not where)
+                or (kind in ("txt","archivo de texto") and
+                    where=="carpeta favorita")):
+            return None
         aliases={"carpeta":"folder","subcarpeta":"folder",
                  "excel":"excel","archivo excel":"excel",
                  "archivo de excel":"excel",
@@ -96,6 +103,10 @@ def parse_pc_command(text: str):
         t)
     if creation:
         kind, name, where=creation.groups()
+        if (not where and kind in (
+                "subcarpeta","txt","archivo txt","archivo de texto",
+                "documento de texto")):
+            return None
         kind_map={
             "carpeta":"folder","subcarpeta":"folder",
             "archivo de texto":"text","documento de texto":"text",
