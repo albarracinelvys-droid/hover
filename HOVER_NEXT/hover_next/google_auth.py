@@ -46,6 +46,62 @@ def _requested_scopes(service):
     return list(SCOPES[_validate_service(service)]) + list(IDENTITY_SCOPES)
 
 
+def _scope_set(value):
+    """Normalize oauthlib's scope list/string without exposing token data."""
+    if isinstance(value,str):
+        return set(value.split())
+    if isinstance(value,(list,tuple,set,frozenset)) and all(
+        isinstance(x,str) for x in value
+    ):
+        return set(value)
+    return set()
+
+
+def _permit_google_identity_aliases(flow, service):
+    """Only tolerate Google's harmless identity-scope normalization.
+
+    OAuthlib rejects *any* scope mismatch. Google may omit/replace the
+    redundant OpenID aliases even when the protected API scope is present.
+    Install an adapter on this OAuth client instance; never relax scope checks
+    for other sessions or accept missing API permissions.
+    """
+    oauth_client=flow.oauth2session._client
+    original=oauth_client.parse_request_body_response
+    required=set(SCOPES[service])
+    requested=set(_requested_scopes(service))
+    identity={"email","https://www.googleapis.com/auth/userinfo.email"}
+
+    def parse_google_response(body,scope=None,**kwargs):
+        try:
+            return original(body,scope=scope,**kwargs)
+        except Warning as mismatch:
+            previous=_scope_set(getattr(mismatch,"old_scope",None))
+            granted=_scope_set(getattr(mismatch,"new_scope",None))
+            token=getattr(mismatch,"token",None)
+            # Reject unrelated warnings, added privileges and denied API
+            # permissions. The original OAuth transaction still validates
+            # authorization-code state, redirect URI, PKCE and token response.
+            if (previous != requested
+                or not required.issubset(granted)
+                or not granted.intersection(identity)
+                or not granted.issubset(requested)
+                or not isinstance(token,dict)
+                or not token.get("access_token")
+                or token.get("token_type","").casefold()!="bearer"):
+                raise GoogleAuthError(
+                    "Google cambió permisos esenciales o devolvió permisos "
+                    "inesperados. No se guardó ningún token."
+                ) from mismatch
+            # This warning occurs AFTER oauthlib validates the token body.
+            # Finish the same per-session parser's assignment, which was
+            # interrupted by the warning; keep oauthlib expiration checks.
+            oauth_client.token=token
+            oauth_client.populate_token_attributes(token)
+            return token
+
+    oauth_client.parse_request_body_response=parse_google_response
+
+
 class GoogleAuthError(RuntimeError):
     pass
 
@@ -142,6 +198,11 @@ def connect(service):
     try:
         flow=InstalledAppFlow.from_client_secrets_file(
             str(CLIENT),scopes=_requested_scopes(service))
+        # The returned identity aliases can vary between Google's consent
+        # screen and token endpoint; handle only the proven safe variants.
+        # Mock flows used in unit tests do not expose an oauthlib client.
+        if hasattr(flow.oauth2session,"_client"):
+            _permit_google_identity_aliases(flow,service)
         # Google's redirect page appears BEFORE the token exchange and save.
         # Never claim the account is connected on that intermediate page.
         credentials=flow.run_local_server(
@@ -151,11 +212,13 @@ def connect(service):
                 "Permisos recibidos. Vuelve a HOVER para comprobar "
                 "que la conexión se haya guardado."),
             access_type="offline",prompt="consent")
+    except GoogleAuthError:
+        raise
     except Exception as exc:
         if "Scope has changed" in str(exc):
             raise GoogleAuthError(
-                "Google devolvió permisos diferentes de los solicitados. "
-                "Actualiza HOVER y vuelve a autorizar."
+                "Google devolvió permisos distintos, que no corresponden "
+                "a las variantes de identidad permitidas."
             ) from exc
         raise GoogleAuthError(
             f"Falló el intercambio OAuth de {service} "
