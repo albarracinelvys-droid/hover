@@ -5,6 +5,11 @@ on:
       - 'HOVER_v4_6_GOOGLE_OAUTH_WINDHAWK.wh.cpp'
       - 'HOVER_NEXT/tests/windhawk_compile_stub.cpp'
       - '.github/workflows/hover-windhawk-compile.yml'
+  pull_request:
+    paths:
+      - 'HOVER_v4_6_GOOGLE_OAUTH_WINDHAWK.wh.cpp'
+      - 'HOVER_NEXT/tests/windhawk_compile_stub.cpp'
+      - '.github/workflows/hover-windhawk-compile.yml'
   workflow_dispatch:
 jobs:
   compile:

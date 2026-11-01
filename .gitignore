@@ -1,0 +1,53 @@
+# Entornos y cachés
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+**/dist/
+**/build/
+**/*.egg-info/
+
+# Credenciales y configuración local (en cualquier carpeta)
+.env
+.env.*
+**/.env
+**/.env.*
+**/config.json
+**/config.local.json
+**/google_oauth_client.json
+**/client_secret*.json
+**/credentials.json
+**/google_tokens/
+**/*.dpapi
+**/*.token
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+
+# Archivos personales y de ejecución
+**/projects.tsv
+**/chrome_profile/
+**/playwright_profile/
+**/voice.pid
+**/voice.log
+**/google_control.txt
+**/google_status.tsv
+**/data/
+**/models/
+**/downloads/
+**/*.log
+**/*.wav
+**/*.mp3
+**/*.m4a
+**/*.zip
+**/Thumbs.db
+**/.DS_Store
+
+# Los ejemplos versionados permanecen visibles
+!**/config.example.json
