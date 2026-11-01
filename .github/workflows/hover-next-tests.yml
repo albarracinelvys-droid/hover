@@ -4,6 +4,10 @@ on:
     paths:
       - 'HOVER_NEXT/**'
       - '.github/workflows/hover-next-tests.yml'
+  pull_request:
+    paths:
+      - 'HOVER_NEXT/**'
+      - '.github/workflows/hover-next-tests.yml'
   workflow_dispatch:
 jobs:
   tests:

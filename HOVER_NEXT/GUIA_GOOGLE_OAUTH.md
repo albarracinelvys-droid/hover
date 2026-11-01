@@ -124,10 +124,12 @@ antes de aceptarlos. Para operaciones de solo lectura los permisos son:
 | Servicio | Scope |
 |---|---|
 | Drive | \`drive.metadata.readonly\` |
-| Calendar | \`calendar.events.readonly\` |
-| Gmail | \`gmail.readonly\` |
+| Calendar | \`calendar.events\` (consultar y crear eventos) |
+| Gmail | \`gmail.readonly\` y \`gmail.compose\` (consultar correos y crear borradores) |
 | Docs | \`documents.readonly\` y \`drive.file\` |
 | Todos | \`userinfo.email\` para comprobar la identidad de cuenta |
+
+**Importante:** los permisos de Calendar y Gmail **no son únicamente de lectura**. HOVER puede crear eventos en Calendar y borradores en Gmail con una orden explícita; la función de borradores no envía mensajes. Revisa los permisos antes de conectar una cuenta.
 
 **5. Desconectar:** desde Atajos → Google, pulsa Desconectar servicio o
 Desconectar todos, o usa «Hover, desconecta Google». Esto elimina los

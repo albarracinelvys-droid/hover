@@ -1,3 +1,7 @@
+# HOVER NEXT — motor Python actual
+
+> **Empieza en el [README principal](../README.md)** para instalación desde la raíz, arquitectura y seguridad. Este documento conserva procedimientos y notas de diagnóstico de distintas versiones; algunos pasos específicos de equipos anteriores pueden no ser aplicables a otros usuarios.
+
 ## Google OAuth 2.0 — HOVER v4.6
 
 La integración opcional de Gmail, Drive, Calendar y Docs ya está en el
@@ -10,7 +14,7 @@ en Google Cloud y autorizar tu cuenta Google en el navegador. Ningún token
 ni archivo OAuth real está publicado en GitHub.
 
 ```powershell
-cd C:\Users\gomez\hover
+cd C:\ruta\a\hover
 git pull origin main
 cd .\HOVER_NEXT
 .\INSTALAR_GOOGLE_HOVER.bat
@@ -48,7 +52,7 @@ del perfil automatizado de Playwright.
 En PowerShell:
 
 \`\`\`powershell
-cd C:\Users\gomez\hover
+cd C:\ruta\a\hover
 git pull origin main
 cd .\HOVER_NEXT
 .\PROBAR_APERTURA_REAL.bat
@@ -104,7 +108,7 @@ opcional y mantiene Whisper si todavía no está instalado.
 1. Cierra con Ctrl+C todas las terminales antiguas de voz.
 2. En PowerShell:
    \`\`\`powershell
-   cd C:\Users\gomez\hover
+   cd C:\ruta\a\hover
    git pull origin main
    cd .\HOVER_NEXT
    .\REPARAR_E_INICIAR_HOVER.bat
@@ -193,7 +197,7 @@ La isla no pide contraseñas ni almacena cookies.
 ## Encender la voz
 
 \`\`\`powershell
-cd C:\\Users\\gomez\\hover
+cd C:\\ruta\\a\\hover
 git pull origin main
 cd .\\HOVER_NEXT
 .\\INSTALAR_WINDOWS.bat
