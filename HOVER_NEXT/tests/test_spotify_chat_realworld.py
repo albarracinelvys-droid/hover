@@ -66,6 +66,29 @@ class ChatAcknowledgmentRegression(unittest.TestCase):
         check.assert_called_once()
         self.assertEqual(check.call_args.args[2],"¿Cómo estás?")
 
+    def test_manual_login_helper_uses_hovers_profile_without_credentials(self):
+        from hover_next import chat_login
+        bridge=MagicMock()
+        page=MagicMock(url="https://chatgpt.com/")
+        bridge.page.return_value=page
+        bridge._login_visible.return_value=False
+        with patch("hover_next.chat_login.BrowserBridge",return_value=bridge) as cls, \
+             patch("builtins.input",return_value=""):
+            self.assertEqual(chat_login.main(),0)
+        args=cls.call_args.args
+        self.assertEqual(args[0].name,"chrome_profile")
+        bridge.close.assert_called_once()
+
+    def test_login_helper_does_not_claim_verified_account_while_login_visible(self):
+        from hover_next import chat_login
+        bridge=MagicMock()
+        bridge.page.return_value=MagicMock(url="https://chatgpt.com/")
+        bridge._login_visible.return_value=True
+        with patch("hover_next.chat_login.BrowserBridge",return_value=bridge), \
+             patch("builtins.input",return_value=""):
+            self.assertEqual(chat_login.main(),2)
+        bridge.close.assert_called_once()
+
     def test_actual_dom_user_bubble_must_grow_and_match_text(self):
         b,page,editor=self._browser()
         locator=MagicMock()
