@@ -103,13 +103,74 @@ class BrowserBridge:
         page.bring_to_front()
         self.prepared = (provider, page)
         if self._login_visible(page,provider):
+            if provider=="chatgpt":
+                try:
+                    from .google_auth import account_email,connected
+                    if connected("gmail"):
+                        linked=account_email("gmail")
+                        stage=self.begin_google_sign_in(page,linked)
+                        print("[chat] Acceso con Google vinculado:",stage,flush=True)
+                        return ("Abrí el inicio de sesión de ChatGPT con Google. "
+                                "Confirma tu cuenta vinculada en Chrome si Google "
+                                "lo solicita y después repite la orden de voz.")
+                except Exception as exc:
+                    print("[chat] Google vinculado no pudo iniciar acceso:",
+                          type(exc).__name__,flush=True)
             print("[chat] Falta iniciar sesión en el perfil independiente de HOVER.",
                   flush=True)
-            return ("Se abrió "+provider+", pero primero debes iniciar sesión "
-                    "en ESTE Chrome de HOVER con tu cuenta. Después repite "
-                    "la orden; tu Chrome habitual usa otro perfil.")
+            return ("ChatGPT requiere iniciar sesión en el Chrome de HOVER. "
+                    "Ejecuta CONECTAR_CHATGPT.bat para usar tu Google vinculado.")
         print(f"[chat] Chat preparado: {provider}. Buscando el cuadro de escritura.",flush=True)
         return "Chat preparado en "+provider+". Dicta el mensaje."
+
+    def begin_google_sign_in(self, page, linked_email):
+        """Start official ChatGPT -> Google sign-in in HOVER's Chrome.
+
+        HOVER never exchanges its Google Workspace OAuth tokens with ChatGPT,
+        copies cookies, enters passwords, or accepts consent on the user's
+        behalf. It may choose an already visible *exact* linked Google account.
+        User completes any Google verification/consent manually.
+        """
+        import re
+        from urllib.parse import urlparse
+        if not re.fullmatch(r"[^@\s]{1,80}@[^@\s]{1,120}",linked_email or ""):
+            raise BrowserUnavailable("No se pudo verificar el Gmail vinculado.")
+        page.goto("https://chatgpt.com/auth/login",
+                  wait_until="domcontentloaded",timeout=30000)
+        # ChatGPT may redirect a previously authenticated profile back home.
+        if urlparse(page.url).hostname not in HOSTS["chatgpt"]:
+            raise BrowserUnavailable("Redirección fuera del sitio de ChatGPT.")
+        pattern=re.compile(r"(?:continuar|iniciar sesi[oó]n|acceder|entrar|"
+                           r"continue|sign in|log in)\s+(?:con|with)\s+google",
+                           re.IGNORECASE)
+        found=None
+        for role in ("button","link"):
+            button=page.get_by_role(role,name=pattern).first
+            if button.count() and button.is_visible():
+                found=button
+                break
+        if found is None:
+            # The user can still select Google's entry manually; do not
+            # guess hidden links or navigate to an invented Google OAuth URL.
+            return "manual"
+        found.click(timeout=6000)
+        print("[chat] Se abrió Continuar con Google.",flush=True)
+        # Google might use an inline redirect or an account-chooser popup.
+        # A fixed small wait is confined to the one-time sign-in path.
+        page.wait_for_timeout(650)
+        pages=list(self.context.pages) if self.context else [page]
+        if page not in pages:
+            pages.append(page)
+        for google_page in reversed(pages):
+            if urlparse(google_page.url).hostname!="accounts.google.com":
+                continue
+            account=google_page.get_by_text(linked_email,exact=True).first
+            if account.count() and account.is_visible():
+                account.click(timeout=5000)
+                print("[chat] Se seleccionó la cuenta Google vinculada; "
+                      "completa cualquier confirmación en Chrome.",flush=True)
+                return "selected"
+        return "google_opened"
 
     def _login_visible(self, page, provider):
         """Detect known authentication screens; fail closed for obvious logout.
