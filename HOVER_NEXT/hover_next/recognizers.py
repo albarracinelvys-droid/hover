@@ -112,7 +112,7 @@ class WhisperRecognizer:
         # Coucou's wake-word examples motivate a contextual vocabulary for the
         # fallback. Temperature zero avoids some Whisper hallucinations.
         # Balance recognition accuracy and response speed for voice commands.
-        # Set HOVER_WHISPER_BEAM=3 to trade some accuracy for lower latency.
+        # Set HOVER_WHISPER_BEAM=1 for more speed or =5 for more accuracy.
         try:
             beam=max(1,min(5,int(os.environ.get("HOVER_WHISPER_BEAM","3"))))
         except ValueError:
