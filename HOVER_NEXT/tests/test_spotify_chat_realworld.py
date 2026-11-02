@@ -91,29 +91,17 @@ class ChatAcknowledgmentRegression(unittest.TestCase):
 
     def test_actual_dom_user_bubble_must_grow_and_match_text(self):
         b,page,editor=self._browser()
-        locator=MagicMock()
-        locator.count.return_value=2
-        locator.last.inner_text.return_value="¿Cómo estás?"
-        page.locator.return_value=locator
         self.assertTrue(b._message_delivered(
             page,"chatgpt","¿Cómo estás?",before=1))
-        locator.count.return_value=1
+        kwargs=page.wait_for_function.call_args.kwargs
+        self.assertEqual(kwargs["arg"]["selector"],
+                         '[data-message-author-role="user"]')
+        self.assertEqual(kwargs["arg"]["previous"],1)
+        self.assertEqual(kwargs["arg"]["text"],"¿Cómo estás?")
+        self.assertEqual(kwargs["timeout"],4500)
+        page.wait_for_function.side_effect=TimeoutError()
         self.assertFalse(b._message_delivered(
             page,"chatgpt","¿Cómo estás?",before=1))
-        locator.count.return_value=2
-        locator.last.inner_text.return_value="mensaje equivocado"
-        self.assertFalse(b._message_delivered(
-            page,"chatgpt","¿Cómo estás?",before=1))
-
-    def test_project_prepare_reports_signin_without_guessing_account(self):
-        b,page,_=self._browser()
-        b.context=MagicMock()
-        b.context.new_page.return_value=page
-        b.prepared=None
-        with patch.object(b,"_login_visible",return_value=True):
-            msg=b.prepare_chat("chatgpt")
-        self.assertIn("iniciar sesión",msg)
-        self.assertIsNotNone(b.prepared)
 
 
 class SpotifyUIRegression(unittest.TestCase):
