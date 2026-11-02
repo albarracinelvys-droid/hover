@@ -165,38 +165,38 @@ def progress_fraction(session) -> float:
     return -1.0
 
 
-async def apply_command(session, command: str) -> None:
-    """Only target the selected media session; no global key toggles."""
+async def apply_command(session, command: str) -> str:
+    """Return the actual WinRT acceptance result for a Spotify control."""
     if session is None:
-        return
+        return "sin_sesion_spotify"
     try:
         if command=="play":
             info=session.get_playback_info()
-            if info.playback_status==PlaybackStatus.PLAYING:
-                await session.try_pause_async()
-            else:
-                await session.try_play_async()
+            accepted=(await session.try_pause_async()
+                      if info.playback_status==PlaybackStatus.PLAYING
+                      else await session.try_play_async())
         elif command=="prev":
-            await session.try_skip_previous_async()
+            accepted=await session.try_skip_previous_async()
         elif command=="next":
-            await session.try_skip_next_async()
+            accepted=await session.try_skip_next_async()
         elif command=="shuffle":
             info=session.get_playback_info()
-            try:
-                await session.try_change_shuffle_active_async(
-                    not bool(info.is_shuffle_active))
-            except AttributeError:
-                pass
+            accepted=await session.try_change_shuffle_active_async(
+                not bool(info.is_shuffle_active))
         elif command=="repeat":
             from winrt.windows.media import MediaPlaybackAutoRepeatMode
             current=session.get_playback_info().auto_repeat_mode
             target=(MediaPlaybackAutoRepeatMode.NONE
                     if current!=MediaPlaybackAutoRepeatMode.NONE
                     else MediaPlaybackAutoRepeatMode.LIST)
-            await session.try_change_auto_repeat_mode_async(target)
+            accepted=await session.try_change_auto_repeat_mode_async(target)
+        else:
+            return "no_permitido"
+        return "solicitado" if accepted else "rechazado_por_reproductor"
     except Exception as exc:
-        print("[media] El reproductor rechazó:",command,type(exc).__name__,
+        print("[media] Spotify rechazó:",command,type(exc).__name__,
               flush=True)
+        return "error_control"
 
 
 async def run(stop_event=None) -> None:
@@ -204,6 +204,8 @@ async def run(stop_event=None) -> None:
     print("Leyendo sesiones de Windows; Ctrl+C para cerrar.")
     print("Estado:", STATUS)
     last_command = ""
+    last_command_result = ""
+    last_session_label = None
     last_art_key = None
     last_art_name = ""
     last_art_attempt = 0.0
@@ -220,19 +222,31 @@ async def run(stop_event=None) -> None:
             if manager is None:
                 manager = await MediaManager.request_async()
             session, spotify = choose_session(manager)
+            label=(friendly_source(session.source_app_user_model_id)
+                   if session is not None else "sin_sesion")
+            if label!=last_session_label:
+                print("[media] Sesión activa:",label,
+                      "| Spotify:", "SI" if spotify else "NO",flush=True)
+                last_session_label=label
             if COMMAND.exists():
                 try:
                     raw = COMMAND.read_text(encoding="ascii").strip()
                     if raw and raw != last_command:
                         last_command = raw
                         action = raw.partition(":")[2]
-                        await apply_command(session, action)
+                        # The notch music controls must never accidentally
+                        # pause Chrome or another non-Spotify media session.
+                        last_command_result=await apply_command(
+                            session if spotify else None,action)
+                        print("[media] Botón",action,":",last_command_result,
+                              flush=True)
                 except (OSError, UnicodeError):
                     pass
 
             data: dict[str, object] = dict(
                 spotify=int(spotify), playing=0, shuffle=0, repeat=0,
                 title="", artist="", source="", progress=-1, artwork="",
+                control=last_command_result,
             )
             if session is not None:
                 try:
