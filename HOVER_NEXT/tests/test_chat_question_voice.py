@@ -100,11 +100,13 @@ class BrowserSubmissionTests(unittest.TestCase):
         editor.is_visible.return_value = True
         page.locator.return_value.last = editor
         browser = BrowserBridge(Path("dummy"))
+        browser._login_visible = MagicMock(return_value=False)
+        browser._message_delivered = MagicMock(return_value=True)
         browser.prepared = ("chatgpt", page)
         result = browser.send_prepared("chatgpt", "¿Cómo estás?")
         editor.fill.assert_called_once_with("¿Cómo estás?", timeout=10000)
         editor.press.assert_called_once_with("Enter", timeout=10000)
-        self.assertIn("Enter", result)
+        self.assertIn("confirmado", result)
         self.assertIsNone(browser.prepared)
 
     def test_not_sent_to_login_redirect(self):
@@ -125,6 +127,7 @@ class BrowserSubmissionTests(unittest.TestCase):
         page.is_closed.return_value = False
         page.locator.return_value.last.count.return_value = 0
         browser = BrowserBridge(Path("dummy"))
+        browser._login_visible = MagicMock(return_value=False)
         browser.prepared = ("chatgpt", page)
         with self.assertRaisesRegex(BrowserUnavailable, "Chrome independiente"):
             browser.send_prepared("chatgpt", "¿Cómo estás?")

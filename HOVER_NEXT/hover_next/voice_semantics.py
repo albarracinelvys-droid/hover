@@ -7,6 +7,7 @@ Potentially destructive system actions are NOT inferred fuzzily.
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 
 # The main parser already removes diacritics and wake words.
 VERB_OPEN = r"(?:abre|abrir|abreme|inicia|iniciar|ejecuta|ejecutar|lanza|muestra|muestrame|pon|quiero\s+abrir)"
@@ -28,12 +29,23 @@ _APPS = {
 }
 
 
-def _app(text: str) -> str | None:
+def _app(text: str, *, allow_fuzzy=False) -> str | None:
     cleaned=re.sub(r"\s+"," ",text).strip(" .,")
     for app,aliases in _APPS.items():
         if cleaned in aliases:
             return app
-    return None
+    if not allow_fuzzy or not 5 <= len(cleaned) <= 42:
+        return None
+    # Only non-destructive OPEN commands may use fuzzy app names. Never
+    # infer which application to close from approximate Whisper spelling.
+    scores=[]
+    for app,aliases in _APPS.items():
+        score=max(SequenceMatcher(None,cleaned,alias).ratio()
+                  for alias in aliases)
+        scores.append((score,app))
+    scores.sort(reverse=True)
+    return scores[0][1] if scores[0][0]>=0.88 and (
+        len(scores)==1 or scores[0][0]-scores[1][0]>=0.07) else None
 
 
 def parse_flexible(text: str):
@@ -61,7 +73,7 @@ def parse_flexible(text: str):
     m=re.fullmatch(LEAD+VERB_OPEN+r"\s+"+ART+r"(.+)",t)
     if m:
         subject=m.group(1).strip()
-        app=_app(subject)
+        app=_app(subject,allow_fuzzy=True)
         if app in ("paint","calculator","explorer","notepad","vscode","terminal",
                    "task_manager"):
             return "windows_app",{"app":app}

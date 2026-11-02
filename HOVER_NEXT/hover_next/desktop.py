@@ -307,8 +307,8 @@ def _spotify_session_play() -> str:
                         # WinRT often reports the previous state immediately
                         # after try_play_async(); allow state notifications
                         # to settle before claiming Spotify was started.
-                        for _ in range(4):
-                            await asyncio.sleep(0.15)
+                        for _ in range(8):
+                            await asyncio.sleep(0.25)
                             after=session.get_playback_info()
                             if "playing" in str(after.playback_status).lower():
                                 return "playing"
@@ -348,8 +348,8 @@ def spotify_start_playback(open_app: bool = True, *, play: bool = True) -> str:
     # A freshly launched app registers a Windows media session later.
     if open_app and state=="no_session":
         import time
-        for _ in range(3):
-            time.sleep(0.4)
+        for _ in range(7):
+            time.sleep(0.5)
             state=_spotify_session_play()
             if state!="no_session":
                 break

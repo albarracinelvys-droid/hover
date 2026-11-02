@@ -102,8 +102,64 @@ class BrowserBridge:
             page = self.page(provider, new=True)
         page.bring_to_front()
         self.prepared = (provider, page)
+        if self._login_visible(page,provider):
+            print("[chat] Falta iniciar sesión en el perfil independiente de HOVER.",
+                  flush=True)
+            return ("Se abrió "+provider+", pero primero debes iniciar sesión "
+                    "en ESTE Chrome de HOVER con tu cuenta. Después repite "
+                    "la orden; tu Chrome habitual usa otro perfil.")
         print(f"[chat] Chat preparado: {provider}. Buscando el cuadro de escritura.",flush=True)
-        return "Pestaña abierta. Dicta el mensaje."
+        return "Chat preparado en "+provider+". Dicta el mensaje."
+
+    def _login_visible(self, page, provider):
+        """Detect known authentication screens; fail closed for obvious logout.
+
+        The host may remain chatgpt.com while showing login/guest UI, so
+        checking only the URL is insufficient.
+        """
+        from urllib.parse import urlparse
+        url=urlparse(page.url)
+        if url.hostname not in HOSTS[provider]:
+            return True
+        if "/auth/login" in url.path or "/login" in url.path:
+            return True
+        selectors=(
+            'a[href*="/auth/login"]',
+            'button[data-testid="login-button"]',
+            'a[data-testid="login-button"]',
+        ) if provider=="chatgpt" else (
+            'a[href*="/login"]', 'a[href*="/auth/login"]',
+        )
+        for selector in selectors:
+            item=page.locator(selector).first
+            if item.count() and item.is_visible():
+                return True
+        return False
+
+    def _message_delivered(self,page,provider,prompt,before=0):
+        """Wait for a *new* user message in DOM; Enter alone is not delivery."""
+        selectors={
+            "chatgpt":'[data-message-author-role="user"]',
+            "claude":'[data-testid="user-message"]',
+        }
+        selector=selectors[provider]
+        try:
+            # Passing args separately avoids injecting dictation into JS.
+            # The previous implementation only waited for an *old* message
+            # to remain visible; that did not confirm a new submission.
+            page.wait_for_function(
+                """({selector, previous, text}) => {
+                    const nodes = [...document.querySelectorAll(selector)];
+                    if (nodes.length <= previous) return false;
+                    const normalize = s => String(s).replace(/\\s+/g,' ').trim();
+                    return normalize(nodes[nodes.length - 1].innerText)
+                           .includes(normalize(text));
+                }""",
+                arg={"selector":selector,"previous":before,"text":prompt},
+                timeout=4500)
+            return True
+        except Exception:
+            return False
 
     def send_prepared(self, provider, prompt):
         if not prompt or not prompt.strip():
@@ -120,6 +176,13 @@ class BrowserBridge:
             raise BrowserUnavailable(
                 "HOVER te llevó a una pantalla de inicio de sesión. "
                 "Accede a tu cuenta en el Chrome abierto por HOVER y repite la orden."
+            )
+        if self._login_visible(page,provider):
+            raise BrowserUnavailable(
+                "ChatGPT/Claude está mostrando el inicio de sesión en el "
+                "Chrome independiente de HOVER. Inicia sesión en esa ventana "
+                "con tu cuenta, vuelve al chat y repite la instrucción. "
+                "HOVER no puede importar la sesión privada de Chrome principal."
             )
         selectors = {
             "chatgpt": ["#prompt-textarea",
@@ -142,13 +205,25 @@ class BrowserBridge:
                 "y repite tu orden de voz."
             )
         page.bring_to_front()
-        print(f"[chat] Escribiendo en {provider}: {prompt[:90]!r}",flush=True)
+        selector=('chatgpt' if provider=='chatgpt' else 'claude')
+        existing=(page.locator('[data-message-author-role="user"]').count()
+                  if provider=='chatgpt' else
+                  page.locator('[data-testid="user-message"]').count())
+        print(f"[chat] Preparando texto para {provider} ({len(prompt)} caracteres).",
+              flush=True)
         editor.fill(prompt, timeout=10000)
         editor.press("Enter", timeout=10000)
-        print("[chat] Pulsé Enter en el cuadro del chat.",flush=True)
+        if not self._message_delivered(page,selector,prompt,before=existing):
+            # Keep the prepared session so the user can inspect/resend without
+            # silently duplicating a message. Do not claim it was sent.
+            raise BrowserUnavailable(
+                "El navegador recibió Enter, pero HOVER NO confirmó un mensaje "
+                "de usuario enviado. Revisa la sesión iniciada y el chat. "
+                "El texto puede seguir en el editor; no lo reenviaré solo."
+            )
+        print("[chat] Mensaje de usuario confirmado en el chat.",flush=True)
         self.prepared = None
-        return ("Escribí el mensaje y pulsé Enter en el chat; "
-                "verifica que aparezca enviado en el navegador.")
+        return "Mensaje confirmado en la conversación de "+provider+"."
 
     def close(self):
         """Idempotent cleanup; called by the browser's owning thread only."""

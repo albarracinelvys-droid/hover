@@ -2,7 +2,7 @@
 // @id hover-island-v38-hardware
 // @name HOVER v4.9.1 - Arrastre real desde los ojos
 // @description Calendario interactivo con eventos de Google, detalles por día y enlaces, vía motor Python local.
-// @version 4.9.1
+// @version 4.9.2
 // @author HOVER - version de prueba
 // @include explorer.exe
 // @architecture x86-64
@@ -208,7 +208,7 @@ ULONGLONG g_chargeToastUntil=0;
 ULONGLONG g_lastHardwareRead=0;
 
 struct MediaState {
-    std::wstring title, artist, source;
+    std::wstring title, artist, source, control;
     bool spotify=false, playing=false, shuffle=false, repeat=false;
     float progress=-1.0f;
     std::wstring artwork;
@@ -971,6 +971,7 @@ void ReadBridgeState() {
             else if(key=="title")next.title=DecodeUtf8(val);
             else if(key=="artist")next.artist=DecodeUtf8(val);
             else if(key=="source")next.source=DecodeUtf8(val);
+            else if(key=="control")next.control=DecodeUtf8(val);
             else if(key=="artwork")next.artwork=DecodeUtf8(val);
             else if(key=="progress") {
                 try{next.progress=Clamp(std::stof(val),0,1);}catch(...){next.progress=-1;}
@@ -1165,14 +1166,24 @@ void DrawQueueIcon(Graphics& g,float cx,float cy,bool active) {
 // El puente escribe archivos locales con nombre fijo por hash para evitar
 // bloquear una caratula que esta siendo reemplazada por Windows.
 void RefreshCoverIfNeeded(const std::wstring& name) {
-    if(name==g_currentCoverName)return;
-    g_currentCoverName=name;
-    g_albumCover.reset();
+    // The bridge writes status and artwork separately. If the image is not
+    // ready on the first render, do NOT cache failure forever.
+    if(name==g_currentCoverName && g_albumCover)return;
+    if(name!=g_currentCoverName){
+        g_albumCover.reset();
+        g_currentCoverName=name;
+    }
     if(name.empty() || name.find(L"..")!=std::wstring::npos ||
        name.find(L'\\')!=std::wstring::npos || name.find(L'/')!=std::wstring::npos)
         return;
     const std::wstring path=BridgePath(name.c_str());
     if(path.empty())return;
+    // Avoid excessive GDI+ file opens while the status references an image
+    // that has not yet been flushed by the Python media bridge.
+    static ULONGLONG lastAttempt=0;
+    const ULONGLONG tick=GetTickCount64();
+    if(tick-lastAttempt<500)return;
+    lastAttempt=tick;
     std::unique_ptr<Bitmap> candidate(new Bitmap(path.c_str()));
     if(candidate->GetLastStatus()==Ok && candidate->GetWidth()>0 && candidate->GetHeight()>0)
         g_albumCover=std::move(candidate);
@@ -1265,7 +1276,11 @@ void PageMusic(Graphics& g) {
     Button(g,73,310,42,30,L"−",true,104);
     Button(g,122,310,42,30,L"+",true,105);
     Button(g,172,310,93,30,L"SILENCIO",false,106);
-    Text(g,g_bridgeOnline?(m.spotify?L"SPOTIFY · CONECTADO":L"SPOTIFY SIN SESION"):
+    const bool rejected=(m.control==L"rechazado_por_reproductor" ||
+                         m.control==L"error_control" ||
+                         m.control==L"sin_sesion_spotify");
+    Text(g,g_bridgeOnline?(rejected?L"CONTROL NO DISPONIBLE":
+         (m.spotify?L"SPOTIFY · CONECTADO":L"SPOTIFY SIN SESION")):
          L"PUENTE SIN CONEXION",320,311,190,27,10.0f,
          Color(205,184,194,208),false,true);
 }
