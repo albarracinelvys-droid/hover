@@ -15,6 +15,7 @@ import os
 import hashlib
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 try:
@@ -86,9 +87,21 @@ def clean(value: object, limit: int = 240) -> str:
 
 def write_state(fields: dict[str, object]) -> None:
     text = "\n".join(f"{key}={clean(val)}" for key, val in fields.items()) + "\n"
-    staging = BASE / "status.new"
-    staging.write_text(text, encoding="utf-8")
-    os.replace(staging, STATUS)
+    # Unique staging names keep HOVER and a standalone bridge from colliding.
+    staging = BASE / f"status.{os.getpid()}.{uuid.uuid4().hex}.new"
+    try:
+        staging.write_text(text, encoding="utf-8")
+        for attempt in range(7):
+            try:
+                os.replace(staging, STATUS)
+                return
+            except PermissionError:
+                # Windhawk may briefly hold status.txt without delete sharing.
+                if attempt == 6:
+                    raise
+                time.sleep(0.04 * (attempt + 1))
+    finally:
+        staging.unlink(missing_ok=True)
 
 
 def choose_session(manager):
