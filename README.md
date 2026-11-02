@@ -112,7 +112,7 @@ El repositorio es **público**, pero todavía **no contiene una licencia de reut
 Si HOVER tarda varios segundos en responder, desde la carpeta raíz utiliza
 `INICIAR_HOVER_RAPIDO.bat`. Este archivo detiene con seguridad la instancia
 anterior de HOVER y reinicia con un perfil más liviano: Whisper **base**,
-beam **2**, pausa de escucha de **600 ms** y espera máxima de **6 s** para
+beam **2**, pausa de escucha de **450 ms** y espera máxima de **6 s** para
 el modelo semántico opcional. Si el motor Parakeet está instalado,
 HOVER lo sigue prefiriendo automáticamente.
 
@@ -124,8 +124,8 @@ git pull --ff-only origin main
 Para priorizar la precisión del reconocimiento, en la misma consola puedes
 usar `HOVER_WHISPER_MODEL=small` y `HOVER_WHISPER_BEAM=5`
 (consulta `docs/RENDIMIENTO.md`). El modo normal mantiene una
-pausa de 750 ms para no separar frases largas; en el modo rápido,
-una pausa de 600 ms podría dividir algunas instrucciones.
+pausa de 540 ms para equilibrar velocidad y precisión; en el modo rápido,
+una pausa de 450 ms podría dividir algunas instrucciones.
 
 Para verificar dónde se consume el tiempo, consulta únicamente las métricas
 del registro local con `DIAGNOSTICAR_RENDIMIENTO_HOVER.bat`.

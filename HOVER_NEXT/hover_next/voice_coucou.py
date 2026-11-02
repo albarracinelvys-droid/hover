@@ -323,7 +323,7 @@ def run(executor, *, engine="auto", model="small",
     command_queue = Queue(maxsize=4)
     google_queue = Queue(maxsize=8)
     try:
-        pause_ms = int(os.environ.get("HOVER_VAD_PAUSE_MS", "750"))
+        pause_ms = int(os.environ.get("HOVER_VAD_PAUSE_MS", "540"))
     except ValueError:
         pause_ms = 750
     vad = AdaptiveVad(minimum_rms=threshold,

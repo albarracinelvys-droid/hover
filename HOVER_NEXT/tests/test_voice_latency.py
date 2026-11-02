@@ -16,15 +16,15 @@ from hover_next import local_nlu
 
 
 class LowerLatencyVADTests(unittest.TestCase):
-    def test_reliable_vad_finalizes_after_750ms(self):
+    def test_fast_vad_finalizes_after_540ms(self):
         vad=AdaptiveVad()
-        self.assertEqual(vad.hangover_frames,25)
+        self.assertEqual(vad.hangover_frames,18)
         speech=np.full(FRAME,0.006,dtype=np.float32)
         silence=np.zeros(FRAME,dtype=np.float32)
         for _ in range(25):
             self.assertIsNone(vad.feed(speech))
-        # Natural 600ms pauses must NOT fragment a voice command.
-        for _ in range(24):
+        # Pauses shorter than 540ms must not fragment a voice command.
+        for _ in range(17):
             self.assertIsNone(vad.feed(silence))
         complete=vad.feed(silence)
         self.assertIsInstance(complete,np.ndarray)

@@ -9,7 +9,7 @@ una medición universal válida para todos los equipos.
 Ejecuta `INICIAR_HOVER_RAPIDO.bat` desde la raíz. El script termina la
 instancia anterior de HOVER (sin afectar otros procesos Python) e inicia:
 - Whisper `base` en CPU, `beam_size=2` si no hay Parakeet.
-- Pausa de VAD de 600 ms (el normal mantiene 750 ms).
+- Pausa de VAD de 450 ms (el normal mantiene 540 ms).
 - Límite de 6 segundos al modelo Qwen opcional.
 
 No instala modelos ni conecta servicios externos nuevos. En el primer
