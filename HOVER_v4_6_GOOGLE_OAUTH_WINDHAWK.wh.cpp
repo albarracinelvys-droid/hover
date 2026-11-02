@@ -208,7 +208,7 @@ ULONGLONG g_chargeToastUntil=0;
 ULONGLONG g_lastHardwareRead=0;
 
 struct MediaState {
-    std::wstring title, artist, source;
+    std::wstring title, artist, source, control;
     bool spotify=false, playing=false, shuffle=false, repeat=false;
     float progress=-1.0f;
     std::wstring artwork;
@@ -971,6 +971,7 @@ void ReadBridgeState() {
             else if(key=="title")next.title=DecodeUtf8(val);
             else if(key=="artist")next.artist=DecodeUtf8(val);
             else if(key=="source")next.source=DecodeUtf8(val);
+            else if(key=="control")next.control=DecodeUtf8(val);
             else if(key=="artwork")next.artwork=DecodeUtf8(val);
             else if(key=="progress") {
                 try{next.progress=Clamp(std::stof(val),0,1);}catch(...){next.progress=-1;}
@@ -1275,7 +1276,11 @@ void PageMusic(Graphics& g) {
     Button(g,73,310,42,30,L"−",true,104);
     Button(g,122,310,42,30,L"+",true,105);
     Button(g,172,310,93,30,L"SILENCIO",false,106);
-    Text(g,g_bridgeOnline?(m.spotify?L"SPOTIFY · CONECTADO":L"SPOTIFY SIN SESION"):
+    const bool rejected=(m.control==L"rechazado_por_reproductor" ||
+                         m.control==L"error_control" ||
+                         m.control==L"sin_sesion_spotify");
+    Text(g,g_bridgeOnline?(rejected?L"CONTROL NO DISPONIBLE":
+         (m.spotify?L"SPOTIFY · CONECTADO":L"SPOTIFY SIN SESION")):
          L"PUENTE SIN CONEXION",320,311,190,27,10.0f,
          Color(205,184,194,208),false,true);
 }
