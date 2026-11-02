@@ -102,8 +102,14 @@ class BrowserBridge:
             page = self.page(provider, new=True)
         page.bring_to_front()
         self.prepared = (provider, page)
+        if self._login_visible(page,provider):
+            print("[chat] Falta iniciar sesión en el perfil independiente de HOVER.",
+                  flush=True)
+            return ("Se abrió "+provider+", pero primero debes iniciar sesión "
+                    "en ESTE Chrome de HOVER con tu cuenta. Después repite "
+                    "la orden; tu Chrome habitual usa otro perfil.")
         print(f"[chat] Chat preparado: {provider}. Buscando el cuadro de escritura.",flush=True)
-        return "Pestaña abierta. Dicta el mensaje."
+        return "Chat preparado en "+provider+". Dicta el mensaje."
 
     def _login_visible(self, page, provider):
         """Detect known authentication screens; fail closed for obvious logout.
