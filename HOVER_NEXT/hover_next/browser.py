@@ -137,24 +137,27 @@ class BrowserBridge:
         return False
 
     def _message_delivered(self,page,provider,prompt,before=0):
-        """Verify the actual *user message* appeared, not just an Enter key.
-
-        This is a best-effort DOM acknowledgment, never a claim that the
-        provider model has replied.
-        """
+        """Wait for a *new* user message in DOM; Enter alone is not delivery."""
         selectors={
             "chatgpt":'[data-message-author-role="user"]',
             "claude":'[data-testid="user-message"]',
         }
         selector=selectors[provider]
         try:
-            page.locator(selector).last.wait_for(state="visible",timeout=4500)
-            items=page.locator(selector)
-            if items.count() <= before:
-                return False
-            import re
-            normalized=lambda value: re.sub(r"\s+"," ",str(value)).strip()
-            return normalized(prompt) in normalized(items.last.inner_text(timeout=2000))
+            # Passing args separately avoids injecting dictation into JS.
+            # The previous implementation only waited for an *old* message
+            # to remain visible; that did not confirm a new submission.
+            page.wait_for_function(
+                """({selector, previous, text}) => {
+                    const nodes = [...document.querySelectorAll(selector)];
+                    if (nodes.length <= previous) return false;
+                    const normalize = s => String(s).replace(/\\s+/g,' ').trim();
+                    return normalize(nodes[nodes.length - 1].innerText)
+                           .includes(normalize(text));
+                }""",
+                arg={"selector":selector,"previous":before,"text":prompt},
+                timeout=4500)
+            return True
         except Exception:
             return False
 
