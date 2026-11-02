@@ -111,12 +111,12 @@ class WhisperRecognizer:
     def transcribe(self, audio):
         # Coucou's wake-word examples motivate a contextual vocabulary for the
         # fallback. Temperature zero avoids some Whisper hallucinations.
-        # Prioritize recognition accuracy for voice commands; optional faster beam.
+        # Balance recognition accuracy and response speed for voice commands.
         # Set HOVER_WHISPER_BEAM=3 to trade some accuracy for lower latency.
         try:
-            beam=max(1,min(5,int(os.environ.get("HOVER_WHISPER_BEAM","5"))))
+            beam=max(1,min(5,int(os.environ.get("HOVER_WHISPER_BEAM","3"))))
         except ValueError:
-            beam=5
+            beam=3
         segments, _ = self.model.transcribe(
             audio, language="es", beam_size=beam, temperature=0,
             condition_on_previous_text=False, vad_filter=False,
