@@ -146,7 +146,7 @@ class ThreadShutdownTests(unittest.TestCase):
              patch("hover_next.voice_coucou.publish"):
             run(executor,engine="auto",device=None)
         browser.close.assert_called_once()
-        self.assertEqual(owning_thread,["HOVER-LocalASR"])
+        self.assertEqual(owning_thread,["HOVER-Commands"])
 
     def test_browser_close_ignores_already_terminated_chrome(self):
         from hover_next.browser import BrowserBridge

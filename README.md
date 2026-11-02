@@ -106,3 +106,27 @@ GitHub Actions ejecuta las pruebas de Python y una comprobación de compilación
 ## Licencia
 
 El repositorio es **público**, pero todavía **no contiene una licencia de reutilización**. La visibilidad pública no otorga automáticamente permiso para redistribuir o modificar el código. Antes de aceptar contribuciones o distribuir versiones, el propietario debe elegir una licencia adecuada.
+
+## Rendimiento y perfiles de voz
+
+Si HOVER tarda varios segundos en responder, desde la carpeta raíz utiliza
+`INICIAR_HOVER_RAPIDO.bat`. Este archivo detiene con seguridad la instancia
+anterior de HOVER y reinicia con un perfil más liviano: Whisper **base**,
+beam **2**, pausa de escucha de **600 ms** y espera máxima de **6 s** para
+el modelo semántico opcional. Si el motor Parakeet está instalado,
+HOVER lo sigue prefiriendo automáticamente.
+
+```powershell
+git pull --ff-only origin main
+.\INICIAR_HOVER_RAPIDO.bat
+```
+
+Para priorizar la precisión del reconocimiento, en la misma consola puedes
+usar `HOVER_WHISPER_MODEL=small` y `HOVER_WHISPER_BEAM=5`
+(consulta `docs/RENDIMIENTO.md`). El modo normal mantiene una
+pausa de 750 ms para no separar frases largas; en el modo rápido,
+una pausa de 600 ms podría dividir algunas instrucciones.
+
+Para verificar dónde se consume el tiempo, consulta únicamente las métricas
+del registro local con `DIAGNOSTICAR_RENDIMIENTO_HOVER.bat`.
+No compartas registros completos sin eliminar datos personales.

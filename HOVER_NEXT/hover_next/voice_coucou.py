@@ -408,6 +408,7 @@ def run(executor, *, engine="auto", model="small",
         except Exception as exc:
             error.append(exc)
             stop.set()
+
     def command_worker():
         # Serial delivery preserves follow-up context; blocking apps and Ollama
         # cannot stop the ASR worker from accepting the next voice segment.

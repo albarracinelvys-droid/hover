@@ -162,7 +162,15 @@ class DetachedLaunchTests(unittest.TestCase):
                    ["launcher","--engine","whisper","--mic","9",
                     "--threshold","0.0006"]):
             self.assertEqual(launch_background.main(),0)
-        launch.assert_called_once_with(engine="whisper",mic=9,threshold=0.0006)
+        launch.assert_called_once_with(engine="whisper",mic=9,threshold=0.0006,model="base")
+
+    def test_explicit_accuracy_profile_reaches_background_launcher(self):
+        with patch("hover_next.launch_background.start",return_value=0) as launch, \
+             patch("hover_next.launch_background.sys.argv",
+                   ["launcher","--engine","whisper","--model","small"]):
+            self.assertEqual(launch_background.main(),0)
+        launch.assert_called_once_with(engine="whisper",mic=None,
+                                       threshold=None,model="small")
 
     def test_all_launchers_keep_console_opt_in(self):
         root=Path(__file__).resolve().parents[1]
