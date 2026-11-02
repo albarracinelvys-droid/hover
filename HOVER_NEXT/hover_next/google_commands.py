@@ -37,6 +37,27 @@ def parse_google_command(spoken):
         r"\s+(?:tengo\s+)?conectad[oa]s?",t):
         return "google_status",{},False
 
+    # Explicit event phrases work without the optional Ollama server.
+    # Example: "crea un evento para mañana que diga materia nula todo el día".
+    m=re.fullmatch(
+        r"(?:crea|crear|creame|agenda|agendar|programa|programar)\\s+"
+        r"(?:(?:un|un nuevo)\\s+)?(?:evento|recordatorio|cita)\\s+"
+        r"(?:para|el)\\s+(.+?)\\s+"
+        r"(?:que\\s+(?:diga|se\\s+llame)|llamad[oa]|titulado)\\s+"
+        r"(.+?)"
+        r"(?:\\s+(todo\\s+el\\s+dia|durante\\s+todo\\s+el\\s+dia|"
+        r"sin\\s+hora|a\\s+las\\s+.+))?$",t)
+    if m:
+        date_phrase=m.group(1).strip()
+        title=m.group(2).strip()
+        schedule=(m.group(3) or "").strip()
+        if schedule in ("todo el dia","durante todo el dia","sin hora"):
+            schedule=""
+        if 2<=len(date_phrase)<=100 and 2<=len(title)<=120:
+            return "google_create_event",{
+                "title":title,"date_phrase":date_phrase,
+                "time_phrase":schedule},False
+
     # "crea un documento de Google llamado Informe semanal"
     m=re.fullmatch(
         r"(?:crea|crear|creame)\s+(?:(?:un|nuevo)\s+)?"
