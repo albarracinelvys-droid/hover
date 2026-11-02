@@ -69,7 +69,7 @@ def _running_hover_process():
     return None
 
 
-def start(*,engine="auto",mic=None,threshold=None):
+def start(*,engine="auto",mic=None,threshold=None,model="base"):
     if sys.platform!="win32":
         raise BackgroundLaunchError("El inicio sin terminal requiere Windows.")
     previous=_running_hover_process()
@@ -83,7 +83,7 @@ def start(*,engine="auto",mic=None,threshold=None):
     pid_path,log_path=state_paths()
     workdir=Path(__file__).resolve().parents[1]
     creationflags=getattr(subprocess,"DETACHED_PROCESS",0x00000008)
-    command=[str(exe),"-m","hover_next.app","--voice","--model","small",
+    command=[str(exe),"-m","hover_next.app","--voice","--model",model,
              "--engine",engine]
     if mic is not None:
         command.extend(["--mic",str(mic)])
@@ -145,6 +145,8 @@ def main():
     parser.add_argument("--stop",action="store_true")
     parser.add_argument("--engine",choices=("auto","parakeet","whisper"),
                         default="auto")
+    parser.add_argument("--model",choices=("tiny","base","small","medium"),
+                        default=os.environ.get("HOVER_WHISPER_MODEL","base"))
     parser.add_argument("--mic",type=int)
     parser.add_argument("--threshold",type=float)
     options=parser.parse_args()
@@ -156,7 +158,7 @@ def main():
         if options.mic is not None and not 0<=options.mic<=100:
             raise BackgroundLaunchError("Índice de micrófono inválido.")
         return start(engine=options.engine,mic=options.mic,
-                     threshold=options.threshold)
+                     threshold=options.threshold,model=options.model)
     except BackgroundLaunchError as exc:
         print("HOVER:",exc,flush=True)
         return 1

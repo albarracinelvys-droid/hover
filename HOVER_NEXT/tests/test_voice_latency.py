@@ -54,16 +54,21 @@ class FastASRTests(unittest.TestCase):
         self.assertEqual(kw["language"],"es")
         self.assertFalse(kw["condition_on_previous_text"])
 
-    def test_higher_accuracy_beam_is_default(self):
+    def test_higher_accuracy_beam_can_be_selected(self):
         import os
         with patch.dict("os.environ",{"HOVER_WHISPER_BEAM":"5"}):
             self.rec.transcribe([0.01]*1600)
         self.assertEqual(self.rec.model.transcribe.call_args.kwargs["beam_size"],5)
 
-    def test_invalid_beam_falls_back_to_reliable_default(self):
+    def test_invalid_beam_falls_back_to_fast_default(self):
         with patch.dict("os.environ",{"HOVER_WHISPER_BEAM":"invalid"}):
             self.rec.transcribe([0.01]*1600)
-        self.assertEqual(self.rec.model.transcribe.call_args.kwargs["beam_size"],5)
+        self.assertEqual(self.rec.model.transcribe.call_args.kwargs["beam_size"],2)
+
+    def test_fast_default_beam_without_environment_override(self):
+        with patch.dict("os.environ",{},clear=True):
+            self.rec.transcribe([0.01]*1600)
+        self.assertEqual(self.rec.model.transcribe.call_args.kwargs["beam_size"],2)
 
 
 class FastIntentTests(unittest.TestCase):
@@ -144,10 +149,13 @@ class GoogleWorkerIsolationTests(unittest.TestCase):
         self.assertIn("google_queue.put_nowait((job[0],job[1]))",source)
         self.assertIn('name="HOVER-GoogleOAuth"',source)
         self.assertIn("samples,queued_at=samples",source)
+        self.assertIn("command_queue = Queue(maxsize=4)",source)
+        self.assertIn('name="HOVER-Commands"',source)
+        self.assertIn("command_queue.put_nowait((text,time.monotonic()))",source)
         self.assertNotIn('work_queue.put_nowait(("google"',source)
         self.assertIn('f"[latencia] cola=',source)
         self.assertIn('f"asr={asr_ms:.0f}ms "',source)
-        self.assertIn('f"interpretacion_y_accion={action_ms:.0f}ms "',source)
+        self.assertIn('f"interpretacion_y_accion={action_ms:.0f}ms"',source)
 
 
 if __name__=="__main__":

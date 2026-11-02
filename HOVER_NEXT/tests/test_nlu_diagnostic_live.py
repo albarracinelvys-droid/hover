@@ -55,7 +55,7 @@ class NLUSemanticsTests(unittest.TestCase):
             intent=local_nlu.model_intent("podrías abrir imágenes")
         self.assertEqual(intent.action,"pc_open_folder")
         self.assertEqual(intent.args["location"],"pictures")
-        self.assertGreaterEqual(post.call_args.kwargs["timeout"],10)
+        self.assertEqual(post.call_args.kwargs["timeout"],6.0)
 
     def test_model_returns_untrusted_action_without_running_it(self):
         packet={"message":{"content":json.dumps({

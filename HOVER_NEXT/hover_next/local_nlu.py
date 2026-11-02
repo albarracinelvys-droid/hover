@@ -277,13 +277,13 @@ def model_intent(spoken):
         "model":model,"stream":False,
         "messages":[{"role":"system","content":PROMPT},
                     {"role":"user","content":spoken}],
-        "format":SCHEMA,"options":{"temperature":0,"num_predict":256},
+        "format":SCHEMA,"options":{"temperature":0,"num_predict":192},
         "keep_alive":MODEL_KEEP_ALIVE
     },ensure_ascii=False).encode("utf-8")
     try:
-        timeout=max(5.0,min(30.0,float(os.environ.get("HOVER_NLU_TIMEOUT","15"))))
+        timeout=max(3.0,min(30.0,float(os.environ.get("HOVER_NLU_TIMEOUT","6"))))
     except ValueError:
-        timeout=15.0
+        timeout=6.0
     started=time.monotonic()
     try:
         req=Request(HOST+"/api/chat",data=request,headers={

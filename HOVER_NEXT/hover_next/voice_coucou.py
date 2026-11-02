@@ -7,6 +7,7 @@ separate threads. Supports "Hover, abre calculadora", "Oye Hover", and F8
 from __future__ import annotations
 
 from queue import Empty, Full, Queue
+import os
 import threading
 import time
 
@@ -319,8 +320,14 @@ def run(executor, *, engine="auto", model="small",
     input_frames = int(round(sample_rate*0.03))
     audio_queue = Queue(maxsize=180)
     work_queue = Queue(maxsize=4)
+    command_queue = Queue(maxsize=4)
     google_queue = Queue(maxsize=8)
-    vad = AdaptiveVad(minimum_rms=threshold)
+    try:
+        pause_ms = int(os.environ.get("HOVER_VAD_PAUSE_MS", "750"))
+    except ValueError:
+        pause_ms = 750
+    vad = AdaptiveVad(minimum_rms=threshold,
+                      hangover_frames=max(10, min(40, round(pause_ms/30))))
     stop = threading.Event()
     error = []
 
@@ -370,7 +377,7 @@ def run(executor, *, engine="auto", model="small",
                 try:
                     text = recognizer.transcribe(normalize_audio(samples))
                     asr_ms=(time.monotonic()-started_at)*1000
-                    action_start=time.monotonic()
+                    handoff_start=time.monotonic()
                     if text:
                         # Reject characteristic Whisper silence hallucinations.
                         noisy_phrases=("subtitulos realizados","subtitulos por la comunidad",
@@ -380,13 +387,17 @@ def run(executor, *, engine="auto", model="small",
                         if any(phrase in cleaned for phrase in noisy_phrases):
                             print("[asr] Fragmento descartado por ruido.",flush=True)
                         else:
-                            dialogue.process(text)
+                            try:
+                                command_queue.put_nowait((text,time.monotonic()))
+                            except Full:
+                                print("[accion] Cola llena; repite tu orden.",flush=True)
+                                publish("error","HOVER ocupado; repite la orden.",3)
                     else:
                         print("[asr] No hubo palabras claras. Intenta hablar mas cerca.",flush=True)
-                    action_ms=(time.monotonic()-action_start)*1000
+                    handoff_ms=(time.monotonic()-handoff_start)*1000
                     print(f"[latencia] cola={queue_ms:.0f}ms "
                           f"asr={asr_ms:.0f}ms "
-                          f"interpretacion_y_accion={action_ms:.0f}ms "
+                          f"entrega_accion={handoff_ms:.0f}ms "
                           f"total={(time.monotonic()-queued_at)*1000:.0f}ms",
                           flush=True)
                 except Exception as exc:
@@ -394,6 +405,30 @@ def run(executor, *, engine="auto", model="small",
                     publish("error",str(exc))
                 finally:
                     work_queue.task_done()
+        except Exception as exc:
+            error.append(exc)
+            stop.set()
+    def command_worker():
+        # Serial delivery preserves follow-up context; blocking apps and Ollama
+        # cannot stop the ASR worker from accepting the next voice segment.
+        try:
+            while not stop.is_set():
+                try:
+                    transcript,queued_at=command_queue.get(timeout=0.2)
+                except Empty:
+                    continue
+                started_at=time.monotonic()
+                wait_ms=(started_at-queued_at)*1000
+                try:
+                    dialogue.process(transcript)
+                except Exception as exc:
+                    print("[accion] Error:",type(exc).__name__,exc,flush=True)
+                    publish("error",str(exc))
+                finally:
+                    action_ms=(time.monotonic()-started_at)*1000
+                    print(f"[latencia] cola_accion={wait_ms:.0f}ms "
+                          f"interpretacion_y_accion={action_ms:.0f}ms",flush=True)
+                    command_queue.task_done()
         except Exception as exc:
             error.append(exc)
             stop.set()
@@ -405,6 +440,7 @@ def run(executor, *, engine="auto", model="small",
                 print("[chat] Chrome de HOVER cerrado desde su hilo.",flush=True)
             except Exception as exc:
                 print("[chat] Error controlado al cerrar Chrome:",exc,flush=True)
+
 
     def google_worker():
         # OAuth and Google network calls are serial on their own thread so
@@ -437,8 +473,10 @@ def run(executor, *, engine="auto", model="small",
             except Full:pass
 
     worker=threading.Thread(target=recognizer_worker,name="HOVER-LocalASR",daemon=True)
+    command_thread=threading.Thread(target=command_worker,name="HOVER-Commands",daemon=True)
     google_thread=threading.Thread(target=google_worker,name="HOVER-GoogleOAuth",daemon=True)
     worker.start()
+    command_thread.start()
     google_thread.start()
 
     def warm_nlu_worker():
@@ -507,6 +545,7 @@ def run(executor, *, engine="auto", model="small",
     finally:
         stop.set()
         worker.join(timeout=2.0)
+        command_thread.join(timeout=2.0)
         google_thread.join(timeout=1.0)
         publish("idle","")
     if error:
