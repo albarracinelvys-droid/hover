@@ -85,11 +85,13 @@ class NoPromptConfirmationTests(unittest.TestCase):
             editor.count.return_value = 1
             editor.is_visible.return_value = True
             page.locator.return_value.last = editor
-            with patch.object(bridge, "page", return_value=page):
+            with patch.object(bridge, "page", return_value=page), \
+                 patch.object(bridge,"_login_visible",return_value=False), \
+                 patch.object(bridge,"_message_delivered",return_value=True):
                 result = bridge.send_prompt("chatgpt", "¿Cómo estás?", new=False)
             editor.fill.assert_called_once_with("¿Cómo estás?", timeout=10000)
             editor.press.assert_called_once_with("Enter", timeout=10000)
-            self.assertIn("Enter", result)
+            self.assertIn("confirmado", result)
 
     def test_browser_prompt_does_not_fake_success_on_login(self):
         from hover_next.browser import BrowserBridge, BrowserUnavailable
