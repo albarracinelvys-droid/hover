@@ -40,13 +40,13 @@ def parse_google_command(spoken):
     # Explicit event phrases work without the optional Ollama server.
     # Example: "crea un evento para mañana que diga materia nula todo el día".
     m=re.fullmatch(
-        r"(?:crea|crear|creame|agenda|agendar|programa|programar)\\s+"
-        r"(?:(?:un|un nuevo)\\s+)?(?:evento|recordatorio|cita)\\s+"
-        r"(?:para|el)\\s+(.+?)\\s+"
-        r"(?:que\\s+(?:diga|se\\s+llame)|llamad[oa]|titulado)\\s+"
+        r"(?:crea|crear|creame|agenda|agendar|programa|programar)\s+"
+        r"(?:(?:un|un nuevo)\s+)?(?:evento|recordatorio|cita)\s+"
+        r"(?:para|el)\s+(.+?)\s+"
+        r"(?:que\s+(?:diga|se\s+llame)|llamad[oa]|titulado)\s+"
         r"(.+?)"
-        r"(?:\\s+(todo\\s+el\\s+dia|durante\\s+todo\\s+el\\s+dia|"
-        r"sin\\s+hora|a\\s+las\\s+.+))?$",t)
+        r"(?:\s+(todo\s+el\s+dia|durante\s+todo\s+el\s+dia|"
+        r"sin\s+hora|a\s+las\s+.+))?$",t)
     if m:
         date_phrase=m.group(1).strip()
         title=m.group(2).strip()
