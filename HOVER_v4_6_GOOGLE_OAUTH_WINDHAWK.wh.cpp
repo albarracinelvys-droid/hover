@@ -2,7 +2,7 @@
 // @id hover-island-v38-hardware
 // @name HOVER v4.9.1 - Arrastre real desde los ojos
 // @description Calendario interactivo con eventos de Google, detalles por día y enlaces, vía motor Python local.
-// @version 4.9.1
+// @version 4.9.2
 // @author HOVER - version de prueba
 // @include explorer.exe
 // @architecture x86-64
@@ -1165,14 +1165,24 @@ void DrawQueueIcon(Graphics& g,float cx,float cy,bool active) {
 // El puente escribe archivos locales con nombre fijo por hash para evitar
 // bloquear una caratula que esta siendo reemplazada por Windows.
 void RefreshCoverIfNeeded(const std::wstring& name) {
-    if(name==g_currentCoverName)return;
-    g_currentCoverName=name;
-    g_albumCover.reset();
+    // The bridge writes status and artwork separately. If the image is not
+    // ready on the first render, do NOT cache failure forever.
+    if(name==g_currentCoverName && g_albumCover)return;
+    if(name!=g_currentCoverName){
+        g_albumCover.reset();
+        g_currentCoverName=name;
+    }
     if(name.empty() || name.find(L"..")!=std::wstring::npos ||
        name.find(L'\\')!=std::wstring::npos || name.find(L'/')!=std::wstring::npos)
         return;
     const std::wstring path=BridgePath(name.c_str());
     if(path.empty())return;
+    // Avoid excessive GDI+ file opens while the status references an image
+    // that has not yet been flushed by the Python media bridge.
+    static ULONGLONG lastAttempt=0;
+    const ULONGLONG tick=GetTickCount64();
+    if(tick-lastAttempt<500)return;
+    lastAttempt=tick;
     std::unique_ptr<Bitmap> candidate(new Bitmap(path.c_str()));
     if(candidate->GetLastStatus()==Ok && candidate->GetWidth()>0 && candidate->GetHeight()>0)
         g_albumCover=std::move(candidate);
