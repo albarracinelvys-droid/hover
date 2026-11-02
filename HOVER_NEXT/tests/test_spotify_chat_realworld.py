@@ -73,6 +73,8 @@ class ChatAcknowledgmentRegression(unittest.TestCase):
         bridge.page.return_value=page
         bridge._login_visible.return_value=False
         with patch("hover_next.chat_login.BrowserBridge",return_value=bridge) as cls, \
+             patch("hover_next.chat_login.linked_google_email",
+                   return_value="linked@example.com"), \
              patch("builtins.input",return_value=""):
             self.assertEqual(chat_login.main(),0)
         args=cls.call_args.args
@@ -85,6 +87,8 @@ class ChatAcknowledgmentRegression(unittest.TestCase):
         bridge.page.return_value=MagicMock(url="https://chatgpt.com/")
         bridge._login_visible.return_value=True
         with patch("hover_next.chat_login.BrowserBridge",return_value=bridge), \
+             patch("hover_next.chat_login.linked_google_email",
+                   return_value="linked@example.com"), \
              patch("builtins.input",return_value=""):
             self.assertEqual(chat_login.main(),2)
         bridge.close.assert_called_once()
