@@ -1,7 +1,7 @@
 """Coucou-inspired speech VAD for HOVER, independent of any ASR engine.
 
 The VAD keeps a recent noise floor, buffers 360 ms of preroll, rejects
-short clicks, and ends a phrase after 750 ms of silence. All audio is RAM-only.
+short clicks, and ends a phrase after about 540 ms of silence. All audio is RAM-only.
 Coucou's Windows project uses the same two-stage (VAD -> STT) approach.
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ FRAME = 480  # 30 ms
 
 class AdaptiveVad:
     def __init__(self, minimum_rms: float = 0.0008,
-                 hangover_frames: int = 25, max_frames: int = 380):
+                 hangover_frames: int = 18, max_frames: int = 380):
         if not 0 < minimum_rms < 0.2:
             raise ValueError("minimum_rms debe ser mayor a 0 y menor a 0.2")
         if not 10 <= hangover_frames <= 40:
