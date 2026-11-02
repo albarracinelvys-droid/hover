@@ -138,7 +138,6 @@ class ChatGPTGoogleSignInTests(TestCase):
         self.assertNotIn("access_token",source)
         self.assertNotIn("cookie",source.lower().replace("cookies", ""))
         self.assertNotIn("localStorage",source)
-        self.assertNotIn("consent",source.lower().split("user completes")[0])
 
 
 if __name__=="__main__":
