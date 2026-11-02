@@ -138,8 +138,9 @@ class BrowserBridge:
         page.goto("https://chatgpt.com/auth/login",
                   wait_until="domcontentloaded",timeout=30000)
         # ChatGPT may redirect a previously authenticated profile back home.
-        if urlparse(page.url).hostname not in HOSTS["chatgpt"]:
-            raise BrowserUnavailable("Redirección fuera del sitio de ChatGPT.")
+        if urlparse(page.url).hostname not in (*HOSTS["chatgpt"],
+                                               "auth.openai.com"):
+            raise BrowserUnavailable("Redirección fuera del inicio de sesión oficial de ChatGPT.")
         pattern=re.compile(r"(?:continuar|iniciar sesi[oó]n|acceder|entrar|"
                            r"continue|sign in|log in)\s+(?:con|with)\s+google",
                            re.IGNORECASE)
