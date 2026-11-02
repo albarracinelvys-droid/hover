@@ -103,20 +103,21 @@ class ParakeetRecognizer:
 
 
 class WhisperRecognizer:
-    name = "Whisper Small (faster-whisper)"
-    def __init__(self, model="small"):
+    name = "Whisper (faster-whisper)"
+    def __init__(self, model="base"):
         from faster_whisper import WhisperModel
+        self.name = f"Whisper {model} (faster-whisper CPU)"
         self.model = WhisperModel(model, device="cpu", compute_type="int8")
 
     def transcribe(self, audio):
         # Coucou's wake-word examples motivate a contextual vocabulary for the
         # fallback. Temperature zero avoids some Whisper hallucinations.
-        # Balance recognition accuracy and response speed for voice commands.
-        # Set HOVER_WHISPER_BEAM=1 for more speed or =5 for more accuracy.
+        # Prioritize recognition accuracy for voice commands; optional faster beam.
+        # Set HOVER_WHISPER_BEAM=3 to trade some accuracy for lower latency.
         try:
-            beam=max(1,min(5,int(os.environ.get("HOVER_WHISPER_BEAM","3"))))
+            beam=max(1,min(5,int(os.environ.get("HOVER_WHISPER_BEAM","2"))))
         except ValueError:
-            beam=3
+            beam=2
         segments, _ = self.model.transcribe(
             audio, language="es", beam_size=beam, temperature=0,
             condition_on_previous_text=False, vad_filter=False,
@@ -140,7 +141,7 @@ class WhisperRecognizer:
         return " ".join(chunks).strip()
 
 
-def create_recognizer(engine="auto", whisper_model="small"):
+def create_recognizer(engine="auto", whisper_model="base"):
     if engine == "parakeet" or (engine == "auto" and has_parakeet()):
         recognizer = ParakeetRecognizer()
     elif engine in ("whisper","auto"):

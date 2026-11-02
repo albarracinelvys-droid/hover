@@ -92,7 +92,7 @@ def main():
     parser.add_argument("--mic-test", action="store_true", help="Medir sonido del microfono sin Whisper")
     parser.add_argument("--mic", type=int, default=None, help="Indice del microfono")
     parser.add_argument("--threshold", type=float, default=0.0008, help="Umbral RMS, predeterminado 0.0008")
-    parser.add_argument("--model", default="small", help="Modelo faster-whisper si no hay Parakeet")
+    parser.add_argument("--model", default="base", help="Modelo faster-whisper si no hay Parakeet")
     parser.add_argument("--engine", choices=("auto","parakeet","whisper"),default="auto",
                         help="Auto elige Parakeet si esta instalado; si no Whisper")
     parser.add_argument("--install-parakeet",action="store_true",

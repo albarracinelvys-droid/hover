@@ -81,12 +81,12 @@ class ReliableSpeechTests(unittest.TestCase):
         quiet=np.zeros(FRAME,dtype=np.float32)
         for _ in range(22):
             self.assertIsNone(vad.feed(speech))
-        # Natural pause of 600ms between HOVER and its action.
-        for _ in range(20):
+        # Pause below the 540 ms fast VAD window between HOVER and its action.
+        for _ in range(14):
             self.assertIsNone(vad.feed(quiet))
         for _ in range(15):
             self.assertIsNone(vad.feed(speech))
-        for _ in range(24):
+        for _ in range(17):
             self.assertIsNone(vad.feed(quiet))
         result=vad.feed(quiet)
         self.assertIsNotNone(result)
