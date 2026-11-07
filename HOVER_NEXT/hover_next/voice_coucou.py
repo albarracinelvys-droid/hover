@@ -348,6 +348,11 @@ def run(executor, *, engine="auto", model="small",
             return "failed"
 
     def voice_dispatch(command):
+        intent = command if isinstance(command, Intent) else parse(command)
+        if intent.action == "hover_stop":
+            print("[idle] HOVER detenido por despedida de voz.", flush=True)
+            stop.set()
+            return "HOVER detenido."
         return run_one(command,executor,voice_mode=True)
 
     voice_dispatch._hover_accepts_intent=True

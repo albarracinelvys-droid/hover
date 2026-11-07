@@ -131,13 +131,14 @@ def _parse_local_creation(t: str) -> Intent | None:
 def parse(text: str) -> Intent:
     spoken_command = extract_wake(text)
     t = spoken_command if spoken_command is not None else normalize(text)
-    # Deliberate shutdown phrase: only a full utterance after the wake word
-    # or F8 may request poweroff. Never fuzzy-match shutdown or infer it
-    # from a general farewell inside a longer sentence.
+    # Farewell stops the assistant; powering off Windows requires an explicit PC command.
     if re.fullmatch(r"(?:bye bye|by by|bai bai|bay bay)", t):
-        return Intent("pc_shutdown")
+        return Intent("hover_stop")
     if re.fullmatch(r"(?:apaga|apagar|apaga ya)\s+(?:el|mi|la)?\s*(?:pc|computador|ordenador|equipo)",t):
         return Intent("pc_shutdown")
+    # Exact ASR variants observed in voice.log. Resolve locally without Ollama.
+    if re.fullmatch(r"(?:abre|abrir|abreme)\s+(?:(?:el|la)\s+)?(?:calculadora|calculador|calcular ahora)", t):
+        return Intent("windows_app", args={"app": "calculator"})
     # Guard state-changing GitHub requests before generic web shortcuts.
     if re.fullmatch(r'(?:que puedes hacer|que sabes hacer|ayuda|comandos|mostrar comandos|lista de comandos)', t):
         return Intent('show_help')
