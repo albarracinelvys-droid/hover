@@ -148,6 +148,8 @@ std::atomic<bool> g_bridgeOnline{false};
 int g_pendingMediaAction=0;
 ULONGLONG g_pendingMediaExpires=0;
 float g_open=0, g_openV=0, g_eyeX=0, g_eyeY=0, g_eyeVX=0, g_eyeVY=0;
+ULONGLONG g_eyeStateAt=0, g_eyeFrameAt=0;
+float g_eyeListen=0, g_eyeThink=0, g_eyeSuccess=0, g_eyeError=0;
 float g_pageEase=1.0f;
 int g_pageDirection=1;
 int g_currentPage=0, g_previousPage=0;
@@ -913,13 +915,15 @@ void ReadVoiceBridge() {
     // Older mods also remain compact when Python sends "quiet-*".
     bool quiet=mode.rfind("quiet-",0)==0;
     if(quiet)mode=mode.substr(6);
+    g_eyeStateAt=GetTickCount64();
     g_voiceState=DecodeUtf8(mode);
     g_voiceMessage=DecodeUtf8(blob.substr(c+1));
     if(g_voiceMessage.size()>115)g_voiceMessage.resize(115);
     ULONGLONG now=GetTickCount64();
     g_voiceNoticeUntil=0; // never trigger kToastHeight due to voice
     g_voiceExpandUntil=0; // no timed enlargement by voice
-    g_voiceQuietUntil=(mode=="listening" || mode=="thinking")?now+1400:0;
+    g_voiceQuietUntil=mode=="listening"?now+12000:
+        mode=="thinking"?now+15000:(mode=="ok" || mode=="error")?now+1800:0;
     // Requested pages are intentionally ignored for voice events.
     // Only a user's mouse/touchpad can open or navigate the notch.
 
@@ -1039,44 +1043,64 @@ void ClockText(wchar_t (&text)[32]) {
 // Dos ojos (sin cara ni aureola): parte blanca e iris del acento de Windows.
 // El globo ocular se desplaza un poco y el iris se desplaza mas, sin salirse.
 void DrawEyes(Graphics& g,float cx) {
-    // Eyes are a little closer while preserving the original look and blink.
+    const ULONGLONG now=GetTickCount64();
+    const float dt=g_eyeFrameAt?Clamp(float(now-g_eyeFrameAt)*0.001f,0.0f,0.10f):0.016f;
+    g_eyeFrameAt=now;
+    // Time-based easing keeps expression transitions consistent under frame drops.
+    const float blend=1.0f-std::exp(-dt*11.0f);
+    const bool live=now<g_voiceQuietUntil;
+    auto ease=[&](float& value,bool target) {
+        value+=((target?1.0f:0.0f)-value)*blend;
+    };
+    ease(g_eyeListen,live && g_voiceState==L"listening");
+    ease(g_eyeThink,live && g_voiceState==L"thinking");
+    ease(g_eyeSuccess,live && g_voiceState==L"ok");
+    ease(g_eyeError,live && g_voiceState==L"error");
+    const float t=float(now%60000ULL)*0.001f;
+    const float age=float(now-g_eyeStateAt)*0.001f;
     auto saved=g.Save();
-    // Larger, smoothly expanding eyes (up to 75% larger in the panel).
     const float opening=Clamp(g_open,0.0f,1.0f);
     const float smooth=opening*opening*(3.0f-2.0f*opening);
     const float scale=1.0f+0.75f*smooth;
-    const float anchorY=23.2f;
-    g.TranslateTransform(cx,anchorY);
-    g.ScaleTransform(scale,scale);
-    g.TranslateTransform(-cx,-anchorY);
-    Color accent=PupilColor();
-    const BYTE ar=accent.GetR(), ag=accent.GetG(), ab=accent.GetB();
-    const float phase=float(GetTickCount64()%5700ULL);
-    const bool voiceListening=g_voiceState==L"listening" &&
-                              GetTickCount64()<g_voiceQuietUntil;
-    float blink=1.0f;
-    if(phase<195.0f) blink=1.0f-0.94f*std::sin(3.14159265f*phase/195.0f);
     const float cy=23.2f;
+    g.TranslateTransform(cx,cy);
+    g.ScaleTransform(scale,scale);
+    g.TranslateTransform(-cx,-cy);
+    Color accent=PupilColor();
+    const float phase=float(now%5700ULL);
+    float blink=phase<195.0f?
+        1.0f-0.94f*std::sin(3.14159265f*phase/195.0f):1.0f;
+    // Attentive widening, a searching gaze, a single nod and a gentle error shake.
+    const float breath=1.0f+0.018f*std::sin(t*2.1f);
+    const float nod=g_eyeSuccess*std::sin(Clamp(age/0.65f,0.0f,1.0f)*3.14159265f)*1.7f;
+    const float shake=g_eyeError*std::sin(age*23.0f)*std::exp(-age*3.0f)*2.0f;
     for(int i=0;i<2;i++) {
-        const float eyeCenter=cx+(i==0?-14.2f:14.2f);
-        const float ex=eyeCenter+g_eyeX*0.30f;
-        const float ey=cy+g_eyeY*0.27f;
-        const float breathing=voiceListening?
-            1.0f+0.035f*std::sin(float(GetTickCount64()%1000ULL)*0.0062831853f):1.0f;
-        const float height=17.0f*blink*breathing+0.35f;
+        const float ex=cx+(i==0?-14.2f:14.2f)+g_eyeX*0.30f+shake;
+        const float ey=cy+g_eyeY*0.27f+nod;
+        const float wink=(i==1 && age<0.55f)?
+            g_eyeSuccess*0.70f*std::sin(Clamp(age/0.55f,0.0f,1.0f)*3.14159265f):0.0f;
+        const float height=std::max(1.2f,17.0f*blink*breath*
+            (1.0f+0.13f*g_eyeListen-0.12f*g_eyeThink-0.10f*g_eyeError)*(1.0f-wink));
+        const float width=10.8f+0.65f*g_eyeListen;
         SolidBrush white(Color(255,253,254,255));
-        g.FillEllipse(&white,ex-5.4f,ey-height*0.5f,10.8f,height);
-        if(blink>0.26f) {
-            // Limita la trayectoria del iris al interior de la zona blanca.
-            const float px=ex+Clamp(g_eyeX*0.69f,-2.20f,2.20f);
-            const float py=ey+Clamp(g_eyeY*0.70f,-3.20f,3.20f);
-            SolidBrush iris(Color(255,ar,ag,ab));
-            g.FillEllipse(&iris,px-2.15f,py-3.05f,4.30f,6.10f);
-            SolidBrush pupil(Color(255,10,14,22));
-            g.FillEllipse(&pupil,px-1.13f,py-1.75f,2.26f,3.50f);
-            SolidBrush glint(Color(248,255,255,255));
-            g.FillEllipse(&glint,px-1.25f,py-2.05f,0.80f,0.90f);
-        }
+        g.FillEllipse(&white,ex-width*0.5f,ey-height*0.5f,width,height);
+        auto eyeSaved=g.Save();
+        GraphicsPath clip;
+        clip.AddEllipse(ex-width*0.5f,ey-height*0.5f,width,height);
+        g.SetClip(&clip,CombineModeIntersect);
+        const float px=ex+Clamp(g_eyeX*0.69f*(1.0f-0.65f*g_eyeThink)
+            +g_eyeThink*1.6f*std::sin(t*3.4f),-2.2f,2.2f);
+        const float py=ey+Clamp(g_eyeY*0.70f*(1.0f-g_eyeThink)
+            -g_eyeThink*(1.2f+0.6f*std::cos(t*3.4f)),-3.2f,3.2f);
+        const float irisScale=1.0f+g_eyeListen*(0.10f+0.04f*std::sin(t*5.0f));
+        SolidBrush iris(Color(255,accent.GetR(),accent.GetG(),accent.GetB()));
+        g.FillEllipse(&iris,px-2.15f*irisScale,py-3.05f*irisScale,
+                      4.30f*irisScale,6.10f*irisScale);
+        SolidBrush pupil(Color(255,10,14,22));
+        g.FillEllipse(&pupil,px-1.13f,py-1.75f,2.26f,3.50f);
+        SolidBrush glint(Color(248,255,255,255));
+        g.FillEllipse(&glint,px-1.25f,py-2.05f,0.80f,0.90f);
+        g.Restore(eyeSaved);
     }
     g.Restore(saved);
 }
@@ -2407,9 +2431,11 @@ void Animate(HWND hwnd){
         SetWindowPos(hwnd,HWND_TOPMOST,x,y,w,h,SWP_NOACTIVATE|SWP_NOOWNERZORDER|SWP_SHOWWINDOW);
     float targetX=Clamp((float(mouse.x)-float(x)-float(w)*0.5f)/62.0f,-1.0f,1.0f)*3.5f;
     float targetY=Clamp(float(mouse.y-(y+25))/62.0f,-1.0f,1.0f)*3.3f;
-    g_eyeVX=(g_eyeVX+(targetX-g_eyeX)*0.30f)*0.66f;
-    g_eyeVY=(g_eyeVY+(targetY-g_eyeY)*0.30f)*0.66f;
-    g_eyeX+=g_eyeVX;g_eyeY+=g_eyeVY;
+    const ULONGLONG gazeNow=GetTickCount64();
+    const float gazeDt=g_eyeFrameAt?Clamp(float(gazeNow-g_eyeFrameAt)*0.001f,0.0f,0.10f):0.016f;
+    const float gazeBlend=1.0f-std::exp(-gazeDt*18.0f);
+    g_eyeX+=(targetX-g_eyeX)*gazeBlend;
+    g_eyeY+=(targetY-g_eyeY)*gazeBlend;
     g_hoverAction=inside?HitAction(float(mouse.x-x),float(mouse.y-y)):-1;
     Paint(hwnd);
 }
