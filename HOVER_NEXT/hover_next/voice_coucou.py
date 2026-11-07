@@ -250,7 +250,8 @@ class VoiceDialogue:
         # Reuse the parsed action; don't call the local model twice.
         command=preparsed if preparsed is not None else parse(utterance)
         if command.action=="unknown":
-            publish("error","Orden no reconocida: "+utterance[:50])
+            publish("confused","Te escuche, pero no entendi la tarea. Repite la orden.")
+            self.command_until=self.clock()+10.0
             print("[accion] Sin coincidencia:",utterance,flush=True)
             return "unknown"
         print("[accion]",command.action,command.args,flush=True)

@@ -11,7 +11,7 @@ import time
 import threading
 import uuid
 
-ALLOWED = {"idle", "listening", "thinking", "ok", "error"}
+ALLOWED = {"idle", "listening", "thinking", "ok", "error", "confused"}
 
 def bridge_file() -> Path:
     path = Path(tempfile.gettempdir()) / "WindhawkIslandPremium"

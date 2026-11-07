@@ -149,7 +149,9 @@ int g_pendingMediaAction=0;
 ULONGLONG g_pendingMediaExpires=0;
 float g_open=0, g_openV=0, g_eyeX=0, g_eyeY=0, g_eyeVX=0, g_eyeVY=0;
 ULONGLONG g_eyeStateAt=0, g_eyeFrameAt=0;
-float g_eyeListen=0, g_eyeThink=0, g_eyeSuccess=0, g_eyeError=0;
+float g_eyeListen=0, g_eyeThink=0, g_eyeSuccess=0, g_eyeError=0, g_eyeConfused=0;
+bool g_isCharging=false;
+ULONGLONG g_lastPowerPoll=0;
 float g_pageEase=1.0f;
 int g_pageDirection=1;
 int g_currentPage=0, g_previousPage=0;
@@ -923,7 +925,7 @@ void ReadVoiceBridge() {
     g_voiceNoticeUntil=0; // never trigger kToastHeight due to voice
     g_voiceExpandUntil=0; // no timed enlargement by voice
     g_voiceQuietUntil=mode=="listening"?now+12000:
-        mode=="thinking"?now+15000:(mode=="ok" || mode=="error")?now+1800:0;
+        mode=="thinking"?now+15000:mode=="confused"?now+4500:(mode=="ok" || mode=="error")?now+1800:0;
     // Requested pages are intentionally ignored for voice events.
     // Only a user's mouse/touchpad can open or navigate the notch.
 
@@ -1056,6 +1058,7 @@ void DrawEyes(Graphics& g,float cx) {
     ease(g_eyeThink,live && g_voiceState==L"thinking");
     ease(g_eyeSuccess,live && g_voiceState==L"ok");
     ease(g_eyeError,live && g_voiceState==L"error");
+    ease(g_eyeConfused,live && g_voiceState==L"confused");
     const float t=float(now%60000ULL)*0.001f;
     const float age=float(now-g_eyeStateAt)*0.001f;
     auto saved=g.Save();
@@ -1079,20 +1082,21 @@ void DrawEyes(Graphics& g,float cx) {
         const float ey=cy+g_eyeY*0.27f+nod;
         const float wink=(i==1 && age<0.55f)?
             g_eyeSuccess*0.70f*std::sin(Clamp(age/0.55f,0.0f,1.0f)*3.14159265f):0.0f;
-        const float height=std::max(1.2f,17.0f*blink*breath*
-            (1.0f+0.13f*g_eyeListen-0.12f*g_eyeThink-0.10f*g_eyeError)*(1.0f-wink));
-        const float width=10.8f+0.65f*g_eyeListen;
+        const float height=std::max(1.2f,22.0f*blink*breath*
+            (1.0f+0.13f*g_eyeListen-0.12f*g_eyeThink-0.10f*g_eyeError)*(1.0f-wink)*(1.0f+(i==0?0.12f:-0.28f)*g_eyeConfused));
+        const float width=15.0f+0.65f*g_eyeListen;
         SolidBrush white(Color(255,253,254,255));
-        g.FillEllipse(&white,ex-width*0.5f,ey-height*0.5f,width,height);
+        Round(g,ex-width*0.5f,ey-height*0.5f,width,height,
+              std::min(4.0f,height*0.5f),Color(255,253,254,255),Color(0,0,0,0),0.0f);
         auto eyeSaved=g.Save();
         GraphicsPath clip;
         clip.AddEllipse(ex-width*0.5f,ey-height*0.5f,width,height);
         g.SetClip(&clip,CombineModeIntersect);
         const float px=ex+Clamp(g_eyeX*0.69f*(1.0f-0.65f*g_eyeThink)
-            +g_eyeThink*1.6f*std::sin(t*3.4f),-2.2f,2.2f);
+            +g_eyeThink*1.6f*std::sin(t*3.4f)+g_eyeConfused*1.5f*std::sin(t*2.5f),-2.2f,2.2f);
         const float py=ey+Clamp(g_eyeY*0.70f*(1.0f-g_eyeThink)
             -g_eyeThink*(1.2f+0.6f*std::cos(t*3.4f)),-3.2f,3.2f);
-        const float irisScale=1.0f+g_eyeListen*(0.10f+0.04f*std::sin(t*5.0f));
+        const float irisScale=1.25f+g_eyeListen*(0.10f+0.04f*std::sin(t*5.0f));
         SolidBrush iris(Color(255,accent.GetR(),accent.GetG(),accent.GetB()));
         g.FillEllipse(&iris,px-2.15f*irisScale,py-3.05f*irisScale,
                       4.30f*irisScale,6.10f*irisScale);
@@ -2167,9 +2171,20 @@ void DrawPanel(Graphics& g,int w,int h,bool showToast) {
                                          BYTE(ac.GetB()*opened*0.075f+14)));
     // Sin contornos: se dibuja solo el relleno curvado de la isla.
     g.FillPath(&gradient,&outline);
+    // Charging comes from Windows battery flags, not merely AC connection.
+    const float energy=0.5f+0.5f*std::sin(float(GetTickCount64()%4000ULL)*0.0015707963f);
+    if(g_isCharging || g_eyeConfused>0.02f) {
+        const bool doubt=g_eyeConfused>0.02f;
+        const BYTE alpha=BYTE((doubt?g_eyeConfused:1.0f)*(35.0f+50.0f*energy));
+        Pen rim(doubt?Color(alpha,255,184,70):Color(alpha,75,225,175),2.0f);
+        auto rimSaved=g.Save();
+        g.SetClip(&outline,CombineModeIntersect);
+        g.DrawPath(&rim,&outline);
+        g.Restore(rimSaved);
+    }
     // Main capsule: deliberately no HOVER text
     wchar_t clock[32]{};ClockText(clock);
-    Text(g,clock,26,11,72,29,12.8f,Color(255,241,241,247),true);
+    Text(g,clock,16,11,62,29,12.0f,Color(255,241,241,247),true);
     DrawEyes(g,w*0.5f);
     // En reposo solo HOVER a la derecha: NUNCA titulo ni artista sobre los ojos.
     if(g_open<0.15f && !showToast) {
@@ -2365,7 +2380,10 @@ void Animate(HWND hwnd){
         }
     }
     SYSTEM_POWER_STATUS ps{};
-    if(GetSystemPowerStatus(&ps)) {
+    if(nowMs-g_lastPowerPoll>=1000 && GetSystemPowerStatus(&ps)) {
+        g_lastPowerPoll=nowMs;
+        g_isCharging=ps.ACLineStatus==1 && ps.BatteryFlag!=255 &&
+                     (ps.BatteryFlag&128)==0 && (ps.BatteryFlag&8)!=0;
         if(g_lastACLineStatus==255) g_lastACLineStatus=ps.ACLineStatus;
         else if(ps.ACLineStatus!=g_lastACLineStatus) {
             if(ps.ACLineStatus==1) g_chargeToastUntil=nowMs+kChargeToastMs;
